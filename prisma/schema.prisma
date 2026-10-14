@@ -1,0 +1,155 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String    @id @default(cuid())
+  email            String    @unique
+  passwordHash     String?
+  name             String
+  role             String    @default("PARTICIPANT") // "ADMIN", "PARTICIPANT", "JUROR"
+  mustSetPassword  Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  submissions      Submission[]
+  ratings          Rating[]
+  participants     ContestParticipant[]
+  jurorEntries     ContestJuror[]
+}
+
+model Contest {
+  id                 String    @id @default(cuid())
+  title              String
+  slug               String    @unique
+  description        String
+  coverImage         String?
+  status             String    @default("DRAFT") // "DRAFT", "SUBMISSION", "RATING", "FINISHED", "ARCHIVED"
+  accessType         String    @default("OPEN")  // "OPEN", "INVITE_ONLY"
+  maxParticipants    Int?
+  submissionStart    DateTime
+  submissionEnd      DateTime
+  ratingStart        DateTime
+  ratingEnd          DateTime
+  votingMode         String    @default("EXCLUSIVE_JURY") // "PEER_REVIEW", "EXCLUSIVE_JURY"
+  anonymousJudging   Boolean   @default(true)
+
+  // Bildregeln / Vorgaben
+  maxFileSizeMb      Float     @default(15.0)
+  allowedFormats     String    @default("image/jpeg,image/png,image/webp")
+  minWidth           Int?      @default(1200)
+  minHeight          Int?      @default(800)
+  maxWidth           Int?
+  maxHeight          Int?
+  aspectRatio        String?   @default("free") // "free", "3:2", "16:9", "4:3", "1:1"
+  namingPattern      String?   @default("")     // z.B. "{thema}_{titel}"
+
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  topics             Topic[]
+  participants       ContestParticipant[]
+  jurors             ContestJuror[]
+  submissions        Submission[]
+}
+
+model Topic {
+  id                     String       @id @default(cuid())
+  contestId              String
+  title                  String
+  description            String?
+  maxSubmissionsPerUser  Int          @default(1)
+  orderIndex             Int          @default(0)
+
+  contest                Contest      @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  submissions            Submission[]
+}
+
+model ContestParticipant {
+  id           String    @id @default(cuid())
+  contestId    String
+  userId       String?
+  email        String
+  name         String?
+  inviteToken  String    @unique @default(cuid())
+  inviteSentAt DateTime?
+  status       String    @default("INVITED") // "INVITED", "REGISTERED"
+  createdAt    DateTime  @default(now())
+
+  contest      Contest   @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  user         User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([contestId, email])
+}
+
+model ContestJuror {
+  id           String    @id @default(cuid())
+  contestId    String
+  userId       String?
+  email        String
+  name         String?
+  inviteToken  String    @unique @default(cuid())
+  inviteSentAt DateTime?
+  status       String    @default("INVITED") // "INVITED", "ACTIVE"
+  createdAt    DateTime  @default(now())
+
+  contest      Contest   @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  user         User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([contestId, email])
+}
+
+model Submission {
+  id               String    @id @default(cuid())
+  contestId        String
+  topicId          String
+  userId           String
+  title            String
+  description      String?
+  originalFilename String
+  storedFilename   String
+  filePath         String
+  mimeType         String
+  fileSize         Int
+  width            Int
+  height           Int
+  aspectRatio      String?
+
+  // EXIF-Metadaten
+  cameraModel      String?
+  lens             String?
+  focalLength      String?
+  iso              Int?
+  aperture         String?
+  shutterSpeed     String?
+  takenAt          DateTime?
+
+  contest          Contest   @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  topic            Topic     @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ratings          Rating[]
+
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model Rating {
+  id           String     @id @default(cuid())
+  submissionId String
+  jurorId      String
+  score        Float      // 0.0 bis 10.0
+  comment      String?
+
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  juror        User       @relation(fields: [jurorId], references: [id], onDelete: Cascade)
+
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([submissionId, jurorId])
+}

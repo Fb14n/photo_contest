@@ -1,36 +1,96 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 📷 PhotoContest – Fotowettbewerb-Plattform
 
-## Getting Started
+Eine moderne, selbstgehostete Web-Plattform zum **Erstellen, Verwalten und Bewerten von Fotowettbewerben**. Entwickelt mit Next.js 16, React 19, TypeScript, Tailwind CSS, Sharp für EXIF/Bildverarbeitung und Prisma mit SQLite.
 
-First, run the development server:
+---
 
+## ✨ Features im Überblick
+
+### 1. Admin-Verwaltung & Wettbewerbserstellung
+- **Übersicht (`/admin`)**: Übersicht aller aktiven, geplanten und beendeten Wettbewerbe mit Kennzahlen zu Einreichungen, Teilnehmern und Juroren.
+- **Wettbewerb anlegen (`/admin/contests/new`)**:
+  - **Zugangstypen**:
+    - *Offener Link*: Jeder kann teilnehmen und sich registrieren.
+    - *Geschlossen (Invite-Only)*: Nur Teilnehmer auf der Einladungsliste erhalten Zugang.
+  - **Teilnehmer-Begrenzung**: Optionale Obergrenze für Teilnehmer.
+  - **Fristen**: Getrennte Zeiträume für Einreichung (*Submission*) und Bewertung (*Jurierung*).
+  - **Bewertungsmodus**:
+    - *Exklusive Fach-Jury*: Nur eingeteilte Juroren mit Jury-Account können bewerten.
+    - *Peer-Review*: Nach Einreichungsende dürfen Teilnehmer alle fremden Bilder mitbewerten (eigenes Bild gesperrt).
+  - **Themenkategorien (Themen)**: Beliebig viele Themen mit individueller Maximalanzahl an Bildern pro Fotograf.
+  - **Strenge Bildregeln**:
+    - Maximale Dateigröße (MB).
+    - Mindest- & Maximalabmessungen (Breite / Höhe in Pixeln).
+    - Erlaubte Dateiformate (JPEG, PNG, WebP).
+    - Seitenverhältnis-Vorgaben (z. B. 3:2, 16:9, 1:1 oder frei).
+    - Optionale Dateinamens-Muster.
+  - **EXIF-Auslesung**: Automatisches Auslesen von Kameramodell, Objektiv, Brennweite, Blende, Verschlusszeit und ISO via Sharp.
+
+### 2. Einladungsmanagement & QR-Codes (`/admin/contests/[id]/invites`)
+- Generierung personalisierter Einladungslinks für Teilnehmer und Juroren.
+- Anzeige und Download hochauflösender **QR-Codes** für Druck, Flyer oder E-Mail-Einladungen.
+- Direkte Token-Aktivierung unter `/invite/[token]`.
+
+### 3. Foto-Einreichung (`/contests/[slug]/submit`)
+- Drag-and-Drop Upload-Zone mit Client- und Server-seitiger Vorab-Prüfung der Wettbewerbsregeln.
+- Vorschau der Bilddimensionen und EXIF-Metadaten vor dem Upload.
+- Galerie der eigenen eingereichten Bilder mit Option zum Löschen/Ersetzen bis zum Fristende.
+
+### 4. Jurierungsraum (0–10 Punkte) (`/contests/[slug]/judge`)
+- Fokussierter Vollbild-Bewertungsmodus für Juroren.
+- Vergabe von **0 bis 10 Punkten** (inkl. Dezimalwerten) und optionalem Textkommentar.
+- **Jederzeit änderbar**: Juroren können ihre Bewertungen bis zum Ende der Jurierungsphase beliebig oft korrigieren.
+- Filter nach *Alle*, *Unbewertet* und *Bereits bewertet*.
+- Tastatur- und Klick-Navigation durch alle Einreichungen.
+- Optionale Anonymisierung (Fotografen-Namen werden vor der Jury verborgen).
+
+### 5. Statistiken & Ranglisten (`/contests/[slug]/results` & `/admin/contests/[id]/stats`)
+- **Podium & Gewinner**: Gold, Silber und Bronze für Gesamtsieger.
+- **Themen-Ranglisten**: Platzierungen gefiltert nach einzelnen Wettbewerbsthemen.
+- **Admin-Auswertung**:
+  - Juror-Fortschritt in Prozent (wer hat wie viele Bilder bewertet).
+  - Notenverteilung in Punkte-Intervallen (0-2, 2-4, 4-6, 6-8, 8-10).
+  - Einzeleinsicht in alle Juroren-Noten und Begründungen.
+  - CSV-Export aller Ergebnisse für Tabellenkalkulationen.
+
+---
+
+## 🚀 Schnellanleitung (Lokal starten)
+
+### 1. Installation & Start
 ```bash
+# Abhängigkeiten installieren
+npm install
+
+# Datenbank initialisieren & Demo-Daten generieren
+npx tsx prisma/seed.ts
+npx tsx prisma/seed-images.ts
+
+# Entwicklungs-Server starten
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Die Website ist anschließend unter **`http://localhost:3000`** erreichbar.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 🔑 Vorkonfigurierte Test-Accounts
 
-## Learn More
+Für schnelles lokales Testen stehen auf der Startseite (`/`) und der Login-Seite (`/login`) **1-Klick-Demo-Buttons** bereit:
 
-To learn more about Next.js, take a look at the following resources:
+| Rolle | E-Mail | Passwort | Beschreibung |
+|---|---|---|---|
+| **Administrator** | `admin@fotowettbewerb.local` | `Admin123!` | Voller Zugriff auf Dashboard, Erstellung, Einladungen & Statistiken |
+| **Jurorin** | `juror.anna@fotowettbewerb.local` | `Jury123!` | Bewertet Bilder (0-10 Punkte) im Architektur-Wettbewerb |
+| **Juror** | `juror.bernd@fotowettbewerb.local` | `Jury123!` | Zweiter Juror zum Testen von Mehrfach-Bewertungen |
+| **Teilnehmerin** | `clara.fotografin@fotowettbewerb.local` | `User123!` | Hat bereits Fotos eingereicht und kann weitere hochladen |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🛠️ Verwendete Technologien
+- **Frontend / Fullstack Framework**: Next.js 16 (App Router), React 19, TypeScript
+- **Styling**: Tailwind CSS, Lucide React Icons
+- **Datenbank & ORM**: SQLite (`dev.db`), Prisma 6
+- **Bildverarbeitung & EXIF**: Sharp
+- **Authentifizierung**: Statelose HTTP-Only JWT Cookies (`jose`), Passwörter gehasht mit `bcryptjs`
+- **QR-Codes**: `qrcode` (PNG & Data-URL Generator)

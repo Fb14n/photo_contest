@@ -1,0 +1,271 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { getAuthSession } from "@/lib/auth";
+import { inspectImageBuffer, validateImageRules } from "@/lib/image";
+import { getEffectiveStatus } from "@/lib/contest-status";
+import fs from "fs";
+import path from "path";
+import crypto from "crypto";
+
+export async function GET(
+  req: Request,
+  props: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await props.params;
+    const session = await getAuthSession();
+    const isAdmin = session?.role === "ADMIN";
+
+    const contest = await prisma.contest.findFirst({
+      where: { OR: [{ id }, { slug: id }] },
+    });
+
+    if (!contest) {
+      return NextResponse.json({ error: "Wettbewerb nicht gefunden." }, { status: 404 });
+    }
+
+    const effectiveStatus = getEffectiveStatus(contest);
+
+    // Filter logic
+    let whereClause: Record<string, unknown> = { contestId: contest.id };
+
+    if (!isAdmin) {
+      if (effectiveStatus === "DRAFT") {
+        return NextResponse.json({ submissions: [] });
+      }
+
+      if (effectiveStatus === "SUBMISSION" || effectiveStatus === "UPCOMING") {
+        // Only return current user's submissions
+        if (!session) {
+          return NextResponse.json({ submissions: [] });
+        }
+        whereClause = {
+          contestId: contest.id,
+          userId: session.userId,
+        };
+      }
+      // In RATING or FINISHED phase, juror or participant can see all submissions
+    }
+
+    const submissions = await prisma.submission.findMany({
+      where: whereClause,
+      include: {
+        topic: {
+          select: { id: true, title: true },
+        },
+        user: {
+          select: { id: true, name: true, email: true },
+        },
+        ratings: session
+          ? {
+              where: { jurorId: session.userId },
+              select: { id: true, score: true, comment: true },
+            }
+          : false,
+        _count: {
+          select: { ratings: true },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    // Anonymize user info if judging is anonymous and viewer is not admin
+    const anonymize =
+      !isAdmin &&
+      contest.anonymousJudging &&
+      (effectiveStatus === "RATING" || contest.status === "RATING");
+
+    const sanitized = submissions.map((sub) => {
+      const myRating = Array.isArray(sub.ratings) && sub.ratings.length > 0 ? sub.ratings[0] : null;
+
+      return {
+        id: sub.id,
+        contestId: sub.contestId,
+        topicId: sub.topicId,
+        topicTitle: sub.topic.title,
+        title: sub.title,
+        description: sub.description,
+        filePath: sub.filePath,
+        width: sub.width,
+        height: sub.height,
+        aspectRatio: sub.aspectRatio,
+        fileSize: sub.fileSize,
+        mimeType: sub.mimeType,
+        cameraModel: sub.cameraModel,
+        lens: sub.lens,
+        focalLength: sub.focalLength,
+        iso: sub.iso,
+        aperture: sub.aperture,
+        shutterSpeed: sub.shutterSpeed,
+        takenAt: sub.takenAt,
+        createdAt: sub.createdAt,
+        photographerName: anonymize ? "Anonymer Teilnehmer" : sub.user.name,
+        photographerEmail: anonymize ? undefined : sub.user.email,
+        isOwn: session ? sub.userId === session.userId : false,
+        myRating,
+        totalRatingsCount: sub._count.ratings,
+      };
+    });
+
+    return NextResponse.json({ submissions: sanitized });
+  } catch (error) {
+    console.error("Fetch submissions error:", error);
+    return NextResponse.json({ error: "Fehler beim Laden der Einreichungen" }, { status: 500 });
+  }
+}
+
+export async function POST(
+  req: Request,
+  props: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getAuthSession();
+    if (!session) {
+      return NextResponse.json({ error: "Nicht angemeldet. Bitte einloggen." }, { status: 401 });
+    }
+
+    const { id } = await props.params;
+
+    const contest = await prisma.contest.findFirst({
+      where: { OR: [{ id }, { slug: id }] },
+      include: { topics: true },
+    });
+
+    if (!contest) {
+      return NextResponse.json({ error: "Wettbewerb nicht gefunden." }, { status: 404 });
+    }
+
+    const effectiveStatus = getEffectiveStatus(contest);
+    const isAdmin = session.role === "ADMIN";
+
+    // Only allow during SUBMISSION phase (or Admin override)
+    if (effectiveStatus !== "SUBMISSION" && !isAdmin) {
+      return NextResponse.json(
+        { error: "Die Einreichungsphase für diesen Wettbewerb ist momentan nicht aktiv." },
+        { status: 403 }
+      );
+    }
+
+    const formData = await req.formData();
+    const file = formData.get("file") as File | null;
+    const topicId = formData.get("topicId") as string | null;
+    const title = (formData.get("title") as string | null)?.trim() || "";
+    const description = (formData.get("description") as string | null)?.trim() || null;
+
+    if (!file || !topicId || !title) {
+      return NextResponse.json(
+        { error: "Bitte Bilddatei, Thema und einen Bildtitel angeben." },
+        { status: 400 }
+      );
+    }
+
+    // Verify topic belongs to contest
+    const topic = contest.topics.find((t) => t.id === topicId);
+    if (!topic) {
+      return NextResponse.json({ error: "Ungültiges Thema ausgewählt." }, { status: 400 });
+    }
+
+    // Check submission count for this user in this topic
+    const existingCount = await prisma.submission.count({
+      where: {
+        contestId: contest.id,
+        topicId: topic.id,
+        userId: session.userId,
+      },
+    });
+
+    if (existingCount >= topic.maxSubmissionsPerUser && !isAdmin) {
+      return NextResponse.json(
+        {
+          error: `Du hast für das Thema "${topic.title}" bereits die maximale Anzahl an Bildern (${topic.maxSubmissionsPerUser}) eingereicht.`,
+        },
+        { status: 400 }
+      );
+    }
+
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // Inspect image via sharp
+    let imageMeta;
+    try {
+      imageMeta = await inspectImageBuffer(buffer, file.size);
+    } catch (e) {
+      console.error("Image decode error:", e);
+      return NextResponse.json(
+        { error: "Die hochgeladene Datei konnte nicht als gültiges Bild verarbeitet werden." },
+        { status: 400 }
+      );
+    }
+
+    // Validate contest rules
+    const validation = validateImageRules(
+      imageMeta,
+      {
+        maxFileSizeMb: contest.maxFileSizeMb,
+        allowedFormats: contest.allowedFormats,
+        minWidth: contest.minWidth,
+        minHeight: contest.minHeight,
+        maxWidth: contest.maxWidth,
+        maxHeight: contest.maxHeight,
+        aspectRatio: contest.aspectRatio,
+        namingPattern: contest.namingPattern,
+      },
+      file.name
+    );
+
+    if (!validation.valid) {
+      return NextResponse.json(
+        {
+          error: "Das Bild entspricht nicht den Wettbewerbsregeln.",
+          details: validation.errors,
+        },
+        { status: 422 }
+      );
+    }
+
+    // Ensure uploads directory exists
+    const uploadsDir = path.join(process.cwd(), "public", "uploads", "submissions");
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    const ext = path.extname(file.name) || `.${imageMeta.format}`;
+    const randomHex = crypto.randomBytes(8).toString("hex");
+    const storedFilename = `${Date.now()}-${randomHex}${ext}`;
+    const targetFilePath = path.join(uploadsDir, storedFilename);
+
+    await fs.promises.writeFile(targetFilePath, buffer);
+    const publicUrl = `/uploads/submissions/${storedFilename}`;
+
+    const submission = await prisma.submission.create({
+      data: {
+        contestId: contest.id,
+        topicId: topic.id,
+        userId: session.userId,
+        title,
+        description,
+        originalFilename: file.name,
+        storedFilename,
+        filePath: publicUrl,
+        mimeType: file.type || `image/${imageMeta.format}`,
+        fileSize: file.size,
+        width: imageMeta.width,
+        height: imageMeta.height,
+        aspectRatio: imageMeta.aspectRatio,
+        cameraModel: imageMeta.cameraModel,
+        lens: imageMeta.lens,
+        focalLength: imageMeta.focalLength,
+        iso: imageMeta.iso,
+        aperture: imageMeta.aperture,
+        shutterSpeed: imageMeta.shutterSpeed,
+        takenAt: imageMeta.takenAt,
+      },
+    });
+
+    return NextResponse.json({ success: true, submission });
+  } catch (error) {
+    console.error("Upload submission error:", error);
+    return NextResponse.json({ error: "Fehler beim Hochladen des Bildes." }, { status: 500 });
+  }
+}
