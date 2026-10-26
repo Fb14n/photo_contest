@@ -26,6 +26,7 @@ interface PersonEntry {
   inviteToken: string;
   status: string;
   userId?: string | null;
+  inviteSentAt?: string | null;
 }
 
 export default function AdminContestInvitesPage({
@@ -44,7 +45,10 @@ export default function AdminContestInvitesPage({
   // New Invite Form
   const [newEmails, setNewEmails] = useState("");
   const [targetType, setTargetType] = useState<"participant" | "juror">("participant");
+  const [sendEmailsDirectly, setSendEmailsDirectly] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [sendingEmailFor, setSendingEmailFor] = useState<string | null>(null);
+  const [emailStatusToast, setEmailStatusToast] = useState<string | null>(null);
 
   // Modal State
   const [modalOpen, setModalOpen] = useState(false);
@@ -102,12 +106,19 @@ export default function AdminContestInvitesPage({
         body: JSON.stringify({
           type: targetType,
           emails: emailList,
+          sendEmail: sendEmailsDirectly,
         }),
       });
 
       const data = await res.json();
       if (data.success) {
         setNewEmails("");
+        setEmailStatusToast(
+          sendEmailsDirectly
+            ? `${emailList.length} Einladung(en) erstellt und per E-Mail versendet!`
+            : `${emailList.length} Einladung(en) erstellt!`
+        );
+        setTimeout(() => setEmailStatusToast(null), 4000);
         await loadData();
         // If single invite created, open modal right away
         if (data.invites?.length === 1) {
@@ -128,6 +139,34 @@ export default function AdminContestInvitesPage({
       alert("Netzwerkfehler");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleResendEmail = async (email: string, type: "participant" | "juror") => {
+    if (!contest) return;
+    setSendingEmailFor(email);
+    try {
+      const res = await fetch(`/api/contests/${contest.id}/invite`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "resend",
+          email,
+          type,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setEmailStatusToast(`Einladungs-E-Mail an ${email} erneut versendet.`);
+        setTimeout(() => setEmailStatusToast(null), 3000);
+        await loadData();
+      } else {
+        alert(data.error || "Fehler beim Versenden der E-Mail");
+      }
+    } catch {
+      alert("Fehler beim Senden");
+    } finally {
+      setSendingEmailFor(null);
     }
   };
 
@@ -221,6 +260,13 @@ export default function AdminContestInvitesPage({
         </Link>
       </div>
 
+      {emailStatusToast && (
+        <div className="mb-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-xs text-emerald-300 flex items-center gap-2 animate-in fade-in">
+          <Check className="h-4 w-4 shrink-0 text-emerald-400" />
+          <span>{emailStatusToast}</span>
+        </div>
+      )}
+
       {/* Public Open Link Banner (if OPEN) */}
       {contest.accessType === "OPEN" && (
         <div className="mb-8 rounded-2xl border border-sky-500/20 bg-gradient-to-r from-sky-500/10 via-neutral-900 to-neutral-900 p-6">
@@ -298,14 +344,24 @@ export default function AdminContestInvitesPage({
             />
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+            <label className="flex items-center gap-2 cursor-pointer text-xs text-neutral-300">
+              <input
+                type="checkbox"
+                checked={sendEmailsDirectly}
+                onChange={(e) => setSendEmailsDirectly(e.target.checked)}
+                className="rounded accent-purple-500 h-4 w-4"
+              />
+              <span>Einladungs-E-Mail direkt per Mail versenden</span>
+            </label>
+
             <button
               type="submit"
               disabled={isSubmitting}
-              className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-purple-600/20 hover:bg-purple-500 transition disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-purple-600/20 hover:bg-purple-500 transition disabled:opacity-50"
             >
               <Plus className="h-4 w-4" />
-              {isSubmitting ? "Wird generiert..." : "Einladungen erstellen & QR-Codes generieren"}
+              {isSubmitting ? "Wird verarbeitet..." : "Einladungen erstellen & QR-Codes generieren"}
             </button>
           </div>
         </form>
@@ -358,6 +414,14 @@ export default function AdminContestInvitesPage({
                         </td>
                         <td className="px-6 py-3.5 text-right">
                           <div className="inline-flex items-center gap-2">
+                            <button
+                              onClick={() => handleResendEmail(p.email, "participant")}
+                              disabled={sendingEmailFor === p.email}
+                              title="Einladungs-E-Mail senden"
+                              className="rounded-lg border border-neutral-800 bg-neutral-900 p-1.5 text-neutral-300 hover:text-sky-400 hover:border-sky-500/40 transition disabled:opacity-40"
+                            >
+                              <Mail className="h-3.5 w-3.5" />
+                            </button>
                             <button
                               onClick={() => copyToClipboard(inviteUrl)}
                               title="Einladungslink kopieren"
@@ -432,6 +496,14 @@ export default function AdminContestInvitesPage({
                         </td>
                         <td className="px-6 py-3.5 text-right">
                           <div className="inline-flex items-center gap-2">
+                            <button
+                              onClick={() => handleResendEmail(j.email, "juror")}
+                              disabled={sendingEmailFor === j.email}
+                              title="Jury-Einladungs-E-Mail senden"
+                              className="rounded-lg border border-neutral-800 bg-neutral-900 p-1.5 text-neutral-300 hover:text-purple-400 hover:border-purple-500/40 transition disabled:opacity-40"
+                            >
+                              <Mail className="h-3.5 w-3.5" />
+                            </button>
                             <button
                               onClick={() => copyToClipboard(inviteUrl)}
                               title="Jury-Link kopieren"
