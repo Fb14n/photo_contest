@@ -26,25 +26,33 @@ Eine moderne, selbstgehostete Web-Plattform zum **Erstellen, Verwalten und Bewer
     - Optionale Dateinamens-Muster.
   - **EXIF-Auslesung**: Automatisches Auslesen von Kameramodell, Objektiv, Brennweite, Blende, Verschlusszeit und ISO via Sharp.
 
-### 2. Einladungsmanagement & QR-Codes (`/admin/contests/[id]/invites`)
+### 2. Einladungsmanagement & E-Mail-Versand (`/admin/contests/[id]/invites`)
 - Generierung personalisierter Einladungslinks für Teilnehmer und Juroren.
+- Automatischer oder manueller **E-Mail-Versand** mit persönlichem Direktzugangslink.
 - Anzeige und Download hochauflösender **QR-Codes** für Druck, Flyer oder E-Mail-Einladungen.
 - Direkte Token-Aktivierung unter `/invite/[token]`.
 
-### 3. Foto-Einreichung (`/contests/[slug]/submit`)
+### 3. Foto-Einreichung & Farbraumprüfung (`/contests/[slug]/submit`)
 - Drag-and-Drop Upload-Zone mit Client- und Server-seitiger Vorab-Prüfung der Wettbewerbsregeln.
+- Farbraum-Erkennung (sRGB-Prüfung und Schutz vor fehlerhaften CMYK-Druckfarben).
 - Vorschau der Bilddimensionen und EXIF-Metadaten vor dem Upload.
 - Galerie der eigenen eingereichten Bilder mit Option zum Löschen/Ersetzen bis zum Fristende.
 
-### 4. Jurierungsraum (0–10 Punkte) (`/contests/[slug]/judge`)
+### 4. Jurierungsraum & Zoom-Lupe (`/contests/[slug]/judge`)
 - Fokussierter Vollbild-Bewertungsmodus für Juroren.
+- **Interaktive Zoom- & Pan-Lupe** (bis zu 400% Zoom, Drag-to-Pan, Mausrad-Steuerung und Vollbild-Inspektion für Schärfe- und Rauschprüfung).
 - Vergabe von **0 bis 10 Punkten** (inkl. Dezimalwerten) und optionalem Textkommentar.
 - **Jederzeit änderbar**: Juroren können ihre Bewertungen bis zum Ende der Jurierungsphase beliebig oft korrigieren.
 - Filter nach *Alle*, *Unbewertet* und *Bereits bewertet*.
 - Tastatur- und Klick-Navigation durch alle Einreichungen.
 - Optionale Anonymisierung (Fotografen-Namen werden vor der Jury verborgen).
 
-### 5. Statistiken & Ranglisten (`/contests/[slug]/results` & `/admin/contests/[id]/stats`)
+### 5. Teilnehmer-Dashboard & Profil (`/profile`)
+- Zentrale Galerie aller eigenen Foto-Einreichungen mit Status und Stimmzähler.
+- Übersicht der eigenen aktiven Wettbewerbe und Jury-Aufgaben mit Direktlinks.
+- Sichere Passwortänderung und vollständiger **Passwort-Vergessen / Zurücksetzen** Flow (`/forgot-password` & `/reset-password`).
+
+### 6. Statistiken & Ranglisten (`/contests/[slug]/results` & `/admin/contests/[id]/stats`)
 - **Podium & Gewinner**: Gold, Silber und Bronze für Gesamtsieger.
 - **Themen-Ranglisten**: Platzierungen gefiltert nach einzelnen Wettbewerbsthemen.
 - **Admin-Auswertung**:
