@@ -12,7 +12,17 @@ import {
   CheckCircle,
   AlertCircle,
   Sparkles,
+  Layers,
+  Plus,
+  Trash2,
 } from "lucide-react";
+
+interface EditableTopic {
+  id?: string;
+  title: string;
+  description: string;
+  maxSubmissionsPerUser: number;
+}
 
 export default function EditContestPage({
   params,
@@ -46,6 +56,25 @@ export default function EditContestPage({
   const [maxHeight, setMaxHeight] = useState<number | "">("");
   const [aspectRatio, setAspectRatio] = useState("free");
   const [namingPattern, setNamingPattern] = useState("");
+  const [topics, setTopics] = useState<EditableTopic[]>([]);
+
+  const handleAddTopic = () => {
+    setTopics([...topics, { title: "", description: "", maxSubmissionsPerUser: 1 }]);
+  };
+
+  const handleRemoveTopic = (index: number) => {
+    if (topics.length <= 1) {
+      alert("Mindestens ein Thema muss im Wettbewerb vorhanden sein.");
+      return;
+    }
+    setTopics(topics.filter((_, i) => i !== index));
+  };
+
+  const handleTopicChange = (index: number, field: keyof EditableTopic, value: any) => {
+    const updated = [...topics];
+    updated[index] = { ...updated[index], [field]: value };
+    setTopics(updated);
+  };
 
   useEffect(() => {
     fetch(`/api/contests/${resolvedParams.id}`)
@@ -72,6 +101,18 @@ export default function EditContestPage({
           setMaxHeight(c.maxHeight || "");
           setAspectRatio(c.aspectRatio || "free");
           setNamingPattern(c.namingPattern || "");
+          if (Array.isArray(c.topics) && c.topics.length > 0) {
+            setTopics(
+              c.topics.map((t: any) => ({
+                id: t.id,
+                title: t.title,
+                description: t.description || "",
+                maxSubmissionsPerUser: t.maxSubmissionsPerUser || 1,
+              }))
+            );
+          } else {
+            setTopics([{ title: "Hauptkategorie", description: "", maxSubmissionsPerUser: 1 }]);
+          }
         } else {
           setErrorMessage("Wettbewerb nicht gefunden");
         }
@@ -110,6 +151,12 @@ export default function EditContestPage({
           maxHeight: maxHeight ? Number(maxHeight) : null,
           aspectRatio,
           namingPattern,
+          topics: topics.map((t) => ({
+            id: t.id,
+            title: t.title.trim(),
+            description: t.description.trim() || null,
+            maxSubmissionsPerUser: Number(t.maxSubmissionsPerUser) || 1,
+          })),
         }),
       });
 
@@ -297,6 +344,86 @@ export default function EditContestPage({
                 className="w-full rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-xs text-white"
               />
             </div>
+          </div>
+        </div>
+
+        {/* Topics / Categories */}
+        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-white flex items-center gap-2">
+                <Layers className="h-4 w-4 text-purple-400" />
+                Themenkategorien ({topics.length})
+              </h2>
+              <p className="text-xs text-neutral-400 mt-0.5">
+                Verwalte Themen für diesen Wettbewerb. Hinweis: Themen mit bestehenden Fotoeinreichungen können zum Schutz vor Datenverlust nicht gelöscht werden.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleAddTopic}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs font-medium text-purple-300 hover:bg-purple-500/20 transition"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Thema hinzufügen
+            </button>
+          </div>
+
+          <div className="space-y-3 pt-2">
+            {topics.map((topic, index) => (
+              <div
+                key={topic.id || `topic-${index}`}
+                className="rounded-xl border border-neutral-800 bg-neutral-950 p-4 space-y-3"
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-2 flex-1">
+                    <span className="text-xs font-semibold text-purple-400 w-5">#{index + 1}</span>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Thementitel (z. B. Schwarzweiß, Makro, Landschaft)"
+                      value={topic.title}
+                      onChange={(e) => handleTopicChange(index, "title", e.target.value)}
+                      className="flex-1 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-white placeholder-neutral-500 focus:border-purple-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1.5">
+                      <label className="text-[11px] text-neutral-400 whitespace-nowrap">Max. Fotos / Fotograf:</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={10}
+                        value={topic.maxSubmissionsPerUser}
+                        onChange={(e) => handleTopicChange(index, "maxSubmissionsPerUser", parseInt(e.target.value, 10) || 1)}
+                        className="w-16 rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1 text-xs text-center text-white"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveTopic(index)}
+                      disabled={topics.length <= 1}
+                      className="p-1.5 text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition disabled:opacity-20"
+                      title="Thema entfernen"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <input
+                    type="text"
+                    placeholder="Optionale Beschreibung oder Vorgaben zu diesem Thema..."
+                    value={topic.description}
+                    onChange={(e) => handleTopicChange(index, "description", e.target.value)}
+                    className="w-full rounded-lg border border-neutral-800 bg-neutral-900/60 px-3 py-1.5 text-xs text-neutral-300 placeholder-neutral-600 focus:border-purple-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 

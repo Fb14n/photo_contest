@@ -128,7 +128,72 @@ export async function PUT(
       },
     });
 
-    return NextResponse.json({ success: true, contest });
+    // Handle topics update if provided
+    if (Array.isArray(data.topics)) {
+      const currentTopics = await prisma.topic.findMany({
+        where: { contestId: contest.id },
+      });
+
+      const currentTopicIds = new Set(currentTopics.map((t) => t.id));
+      const incomingTopicIds = new Set(
+        data.topics
+          .filter((t: { id?: string }) => t.id && !t.id.startsWith("temp-"))
+          .map((t: { id: string }) => t.id)
+      );
+
+      // Check which topics are being removed
+      for (const curr of currentTopics) {
+        if (!incomingTopicIds.has(curr.id)) {
+          const submissionCount = await prisma.submission.count({
+            where: { topicId: curr.id },
+          });
+          if (submissionCount > 0) {
+            return NextResponse.json(
+              {
+                error: `Das Thema "${curr.title}" kann nicht gelöscht werden, da dafür bereits ${submissionCount} Foto(s) eingereicht wurden.`,
+              },
+              { status: 400 }
+            );
+          }
+          await prisma.topic.delete({ where: { id: curr.id } });
+        }
+      }
+
+      // Update or create incoming topics
+      for (let idx = 0; idx < data.topics.length; idx++) {
+        const t = data.topics[idx];
+        const isExisting = t.id && currentTopicIds.has(t.id);
+
+        if (isExisting) {
+          await prisma.topic.update({
+            where: { id: t.id },
+            data: {
+              title: t.title?.trim() || "Thema",
+              description: t.description?.trim() || null,
+              maxSubmissionsPerUser: Number(t.maxSubmissionsPerUser) || 1,
+              orderIndex: idx,
+            },
+          });
+        } else {
+          await prisma.topic.create({
+            data: {
+              contestId: contest.id,
+              title: t.title?.trim() || "Thema",
+              description: t.description?.trim() || null,
+              maxSubmissionsPerUser: Number(t.maxSubmissionsPerUser) || 1,
+              orderIndex: idx,
+            },
+          });
+        }
+      }
+    }
+
+    const updatedContest = await prisma.contest.findUnique({
+      where: { id: contest.id },
+      include: { topics: { orderBy: { orderIndex: "asc" } } },
+    });
+
+    return NextResponse.json({ success: true, contest: updatedContest });
   } catch (error) {
     console.error("Update contest error:", error);
     return NextResponse.json({ error: "Fehler beim Aktualisieren des Wettbewerbs" }, { status: 500 });
