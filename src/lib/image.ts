@@ -6,6 +6,7 @@ export interface ImageMetadata {
   format: string;
   fileSize: number;
   aspectRatio: string;
+  colorSpace?: string;
   cameraModel?: string;
   lens?: string;
   focalLength?: string;
@@ -66,6 +67,7 @@ export async function inspectImageBuffer(
   const height = metadata.height || 0;
   const format = (metadata.format || "unknown").toLowerCase();
   const aspectRatio = detectAspectRatio(width, height);
+  const colorSpace = metadata.space || "unknown";
 
   // Extract EXIF data if present
   let cameraModel: string | undefined;
@@ -118,6 +120,7 @@ export async function inspectImageBuffer(
     format,
     fileSize,
     aspectRatio,
+    colorSpace,
     cameraModel,
     lens,
     focalLength,
@@ -161,6 +164,13 @@ export function validateImageRules(
   if (!isAllowedFormat) {
     errors.push(
       `Format '${imageMeta.format.toUpperCase()}' ist nicht erlaubt. Erlaubt sind: ${rules.allowedFormats}`
+    );
+  }
+
+  // Color space validation
+  if (imageMeta.colorSpace && imageMeta.colorSpace.toLowerCase() === "cmyk") {
+    errors.push(
+      "Das Bild liegt im CMYK-Druckfarbraum vor. Für Web-Wettbewerbe muss das Bild im sRGB- oder RGB-Farbraum vorliegen."
     );
   }
 
