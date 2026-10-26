@@ -12,6 +12,10 @@ import {
   Maximize2,
   AlertCircle,
   Sparkles,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  X,
 } from "lucide-react";
 
 export interface JurySubmission {
@@ -79,6 +83,43 @@ export default function JuryEvaluationRoom({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showExif, setShowExif] = useState(true);
 
+  // Lightbox & Zoom State
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [zoomScale, setZoomScale] = useState(1);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [showLightboxExif, setShowLightboxExif] = useState(true);
+
+  const handleOpenLightbox = () => {
+    setZoomScale(1);
+    setPanOffset({ x: 0, y: 0 });
+    setLightboxOpen(true);
+  };
+
+  const handleCloseLightbox = () => {
+    setLightboxOpen(false);
+    setZoomScale(1);
+    setPanOffset({ x: 0, y: 0 });
+  };
+
+  const handleZoomIn = () => {
+    setZoomScale((prev) => Math.min(prev + 0.5, 4));
+  };
+
+  const handleZoomOut = () => {
+    setZoomScale((prev) => {
+      const next = Math.max(prev - 0.5, 1);
+      if (next === 1) setPanOffset({ x: 0, y: 0 });
+      return next;
+    });
+  };
+
+  const handleResetZoom = () => {
+    setZoomScale(1);
+    setPanOffset({ x: 0, y: 0 });
+  };
+
   // Sync state whenever currentSub changes
   useEffect(() => {
     if (currentSub) {
@@ -86,6 +127,8 @@ export default function JuryEvaluationRoom({
       setActiveComment(currentSub.myRating?.comment || "");
       setSaveSuccess(false);
       setErrorMessage(null);
+      setZoomScale(1);
+      setPanOffset({ x: 0, y: 0 });
     }
   }, [currentSub]);
 
@@ -144,7 +187,12 @@ export default function JuryEvaluationRoom({
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
-      if (e.key === "ArrowLeft") {
+      if (e.key === "Escape") {
+        if (lightboxOpen) {
+          e.preventDefault();
+          handleCloseLightbox();
+        }
+      } else if (e.key === "ArrowLeft") {
         e.preventDefault();
         handlePrev();
       } else if (e.key === "ArrowRight") {
@@ -159,7 +207,7 @@ export default function JuryEvaluationRoom({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handlePrev, handleNext, handleSaveScore, activeComment]);
+  }, [handlePrev, handleNext, handleSaveScore, activeComment, lightboxOpen]);
 
   const ratedCount = submissions.filter((s) => s.myRating).length;
   const totalCount = submissions.length;
@@ -253,12 +301,14 @@ export default function JuryEvaluationRoom({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Main Photo Viewer (8 cols) */}
           <div className="lg:col-span-8 flex flex-col gap-3">
-            <div className="relative flex min-h-[500px] max-h-[700px] items-center justify-center overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950 p-2 shadow-2xl">
+            <div className="relative flex min-h-[500px] max-h-[700px] items-center justify-center overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950 p-2 shadow-2xl group">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={currentSub.filePath}
                 alt={currentSub.title}
-                className="max-h-[660px] w-auto max-w-full rounded-xl object-contain select-none"
+                onClick={handleOpenLightbox}
+                className="max-h-[660px] w-auto max-w-full rounded-xl object-contain select-none cursor-zoom-in transition group-hover:brightness-105"
+                title="Klicken für 100% Zoom & Vollbild-Lupe"
               />
 
               {/* Navigation overlays */}
@@ -296,6 +346,18 @@ export default function JuryEvaluationRoom({
                     Noch nicht bewertet
                   </span>
                 )}
+              </div>
+
+              {/* Zoom & Fullscreen button */}
+              <div className="absolute top-4 right-4 flex items-center gap-2">
+                <button
+                  onClick={handleOpenLightbox}
+                  className="flex items-center gap-1.5 rounded-lg bg-black/75 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur border border-white/15 hover:bg-purple-600 transition shadow-lg"
+                  title="Vollbild & Zoom-Lupe öffnen"
+                >
+                  <ZoomIn className="h-3.5 w-3.5" />
+                  <span>Zoom / Lupe</span>
+                </button>
               </div>
 
               {/* Counter overlay */}
@@ -517,6 +579,176 @@ export default function JuryEvaluationRoom({
             Du hast alle Bilder in diesem Filter bewertet. Du kannst deine Noten bis zum Ende der
             Jurierungszeit jederzeit im Tab &bdquo;Bereits bewertet&ldquo; ändern.
           </p>
+        </div>
+      )}
+
+      {/* Lightbox / Zoom-Lupe Modal */}
+      {lightboxOpen && currentSub && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col bg-black/95 backdrop-blur-md animate-in fade-in duration-200 select-none"
+          onMouseUp={() => setIsDragging(false)}
+        >
+          {/* Header Controls */}
+          <div className="flex items-center justify-between px-6 py-3 border-b border-neutral-800 bg-neutral-950/90 z-20">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-bold text-white truncate max-w-sm">
+                {currentSub.title}
+              </span>
+              <span className="text-xs text-neutral-400 font-mono">
+                ({currentIndex + 1} / {filteredSubmissions.length})
+              </span>
+              <span className="hidden sm:inline-block text-[11px] px-2 py-0.5 rounded bg-neutral-800 text-purple-300">
+                {currentSub.topicTitle}
+              </span>
+            </div>
+
+            {/* Center: Zoom Buttons */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleZoomOut}
+                disabled={zoomScale <= 1}
+                className="p-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-800 disabled:opacity-30 transition"
+                title="Verkleinern"
+              >
+                <ZoomOut className="h-4 w-4" />
+              </button>
+              <span className="text-xs font-mono font-semibold text-purple-400 px-2 py-1 bg-neutral-900 rounded-md border border-neutral-800">
+                {Math.round(zoomScale * 100)}%
+              </span>
+              <button
+                onClick={handleZoomIn}
+                disabled={zoomScale >= 4}
+                className="p-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-800 disabled:opacity-30 transition"
+                title="Vergrößern (bis 400%)"
+              >
+                <ZoomIn className="h-4 w-4" />
+              </button>
+              <button
+                onClick={handleResetZoom}
+                className="p-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-800 transition"
+                title="Zoom zurücksetzen (100%)"
+              >
+                <RotateCcw className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Right: Actions */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowLightboxExif(!showLightboxExif)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
+                  showLightboxExif
+                    ? "bg-purple-600/20 text-purple-300 border-purple-500/30"
+                    : "bg-neutral-900 text-neutral-400 border-neutral-800 hover:text-white"
+                }`}
+                title="EXIF-Daten ein-/ausblenden"
+              >
+                <Info className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">EXIF</span>
+              </button>
+
+              <button
+                onClick={handleCloseLightbox}
+                className="p-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-800 transition"
+                title="Schließen (ESC)"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Main Stage */}
+          <div
+            className="relative flex-1 flex items-center justify-center overflow-hidden cursor-grab active:cursor-grabbing"
+            onMouseDown={(e) => {
+              if (zoomScale > 1) {
+                setIsDragging(true);
+                setDragStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
+              }
+            }}
+            onMouseMove={(e) => {
+              if (isDragging && zoomScale > 1) {
+                setPanOffset({
+                  x: e.clientX - dragStart.x,
+                  y: e.clientY - dragStart.y,
+                });
+              }
+            }}
+            onWheel={(e) => {
+              e.preventDefault();
+              if (e.deltaY < 0) {
+                setZoomScale((prev) => Math.min(prev + 0.25, 4));
+              } else {
+                setZoomScale((prev) => {
+                  const next = Math.max(prev - 0.25, 1);
+                  if (next === 1) setPanOffset({ x: 0, y: 0 });
+                  return next;
+                });
+              }
+            }}
+          >
+            {/* Nav Arrows */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handlePrev();
+              }}
+              disabled={currentIndex === 0}
+              className="absolute left-6 top-1/2 -translate-y-1/2 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-neutral-900/80 text-white border border-neutral-700 backdrop-blur hover:bg-neutral-800 disabled:opacity-20 transition"
+              title="Vorheriges Bild (Pfeil links)"
+            >
+              <ChevronLeft className="h-7 w-7" />
+            </button>
+
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleNext();
+              }}
+              disabled={currentIndex === filteredSubmissions.length - 1}
+              className="absolute right-6 top-1/2 -translate-y-1/2 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-neutral-900/80 text-white border border-neutral-700 backdrop-blur hover:bg-neutral-800 disabled:opacity-20 transition"
+              title="Nächstes Bild (Pfeil rechts)"
+            >
+              <ChevronRight className="h-7 w-7" />
+            </button>
+
+            {/* Scaled & Panned Image */}
+            <div
+              style={{
+                transform: `scale(${zoomScale}) translate(${panOffset.x / zoomScale}px, ${panOffset.y / zoomScale}px)`,
+                transition: isDragging ? "none" : "transform 0.15s ease-out",
+              }}
+              className="flex items-center justify-center max-w-full max-h-full"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={currentSub.filePath}
+                alt={currentSub.title}
+                className="max-h-[82vh] max-w-[90vw] object-contain pointer-events-none select-none rounded shadow-2xl"
+              />
+            </div>
+          </div>
+
+          {/* Bottom EXIF / Hint Bar */}
+          <div className="px-6 py-2.5 border-t border-neutral-800 bg-neutral-950/90 z-20 flex flex-wrap items-center justify-between text-xs text-neutral-400 gap-3">
+            <div className="flex items-center gap-4 flex-wrap">
+              {showLightboxExif && (
+                <>
+                  <span><strong>Auflösung:</strong> {currentSub.width} × {currentSub.height} px</span>
+                  {currentSub.cameraModel && <span><strong>Kamera:</strong> {currentSub.cameraModel}</span>}
+                  {currentSub.lens && <span><strong>Objektiv:</strong> {currentSub.lens}</span>}
+                  {currentSub.focalLength && <span><strong>Brennweite:</strong> {currentSub.focalLength}</span>}
+                  {currentSub.aperture && <span><strong>Blende:</strong> {currentSub.aperture}</span>}
+                  {currentSub.shutterSpeed && <span><strong>Verschlusszeit:</strong> {currentSub.shutterSpeed}</span>}
+                  {currentSub.iso && <span><strong>ISO:</strong> {currentSub.iso}</span>}
+                </>
+              )}
+            </div>
+
+            <div className="text-[11px] text-neutral-400 font-mono">
+              Mausrad: Zoom | Ziehen: Verschieben | ESC: Schließen
+            </div>
+          </div>
         </div>
       )}
     </div>
