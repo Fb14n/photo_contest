@@ -100,7 +100,7 @@ export async function POST(
     if (!isAdmin) {
       if (contest.votingMode === "PEER_REVIEW") {
         // Can't rate your own picture!
-        if (submission.userId === session.userId) {
+        if (submission.userId && submission.userId === session.userId) {
           return NextResponse.json({ error: "Du kannst dein eigenes Bild nicht bewerten." }, { status: 400 });
         }
 

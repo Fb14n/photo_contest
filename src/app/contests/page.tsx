@@ -123,7 +123,11 @@ export default function ContestsListPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filtered.map((contest) => (
-              <ContestCard key={contest.id} contest={contest} />
+              <ContestCard
+                key={contest.id}
+                contest={contest}
+                isAdmin={currentUser?.role === "ADMIN"}
+              />
             ))}
           </div>
         )}

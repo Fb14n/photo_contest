@@ -382,6 +382,14 @@ export default function ProfilePage() {
                           Foto einreichen
                         </Link>
                       )}
+                      {c.effectiveStatus === "RATING" && (
+                        <Link
+                          href={`/contests/${c.slug}/judge`}
+                          className="rounded-xl bg-purple-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-purple-500 transition"
+                        >
+                          Zur Jurierung
+                        </Link>
+                      )}
                       {isFinished && (
                         <Link
                           href={`/contests/${c.slug}/results`}

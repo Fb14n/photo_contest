@@ -57,6 +57,21 @@ export default function NewContestPage() {
   // Contest Flow & Upload Mode
   const [contestFlowMode, setContestFlowMode] = useState<"STANDARD" | "DIRECT_RATING">("STANDARD");
 
+  const handleFlowModeChange = (mode: "STANDARD" | "DIRECT_RATING") => {
+    setContestFlowMode(mode);
+    const now = new Date();
+    if (mode === "DIRECT_RATING") {
+      setRatingStart(now.toISOString().slice(0, 16));
+      setRatingEnd(new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16));
+    } else {
+      const defaultSubEnd = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
+      setSubmissionStart(now.toISOString().slice(0, 16));
+      setSubmissionEnd(defaultSubEnd);
+      setRatingStart(defaultSubEnd);
+      setRatingEnd(new Date(now.getTime() + 21 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16));
+    }
+  };
+
   // Access & Participants
   const [accessType, setAccessType] = useState<"OPEN" | "INVITE_ONLY">("OPEN");
   const [maxParticipants, setMaxParticipants] = useState<string>("");
@@ -118,7 +133,7 @@ export default function NewContestPage() {
       return;
     }
 
-    const parsedParticipants = participantEmails
+    const parsedParticipants = contestFlowMode === "DIRECT_RATING" ? [] : participantEmails
       .split(/[\n,;]+/)
       .map((e) => e.trim().toLowerCase())
       .filter((e) => e && e.includes("@"));
@@ -128,10 +143,15 @@ export default function NewContestPage() {
       .map((e) => e.trim().toLowerCase())
       .filter((e) => e && e.includes("@"));
 
-    const allParticipantEmails = Array.from(new Set([...selectedParticipantUsers, ...parsedParticipants]));
+    const allParticipantEmails = contestFlowMode === "DIRECT_RATING" ? [] : Array.from(new Set([...selectedParticipantUsers, ...parsedParticipants]));
     const allJurorEmails = Array.from(new Set([...selectedJurorUsers, ...parsedJurors]));
 
     setIsSubmitting(true);
+
+    const nowIso = new Date().toISOString();
+    const finalSubStart = contestFlowMode === "DIRECT_RATING" ? nowIso : (submissionStart || nowIso);
+    const finalSubEnd = contestFlowMode === "DIRECT_RATING" ? nowIso : submissionEnd;
+    const finalRatingStart = contestFlowMode === "DIRECT_RATING" ? (ratingStart || nowIso) : submissionEnd;
 
     try {
       const res = await fetch("/api/contests", {
@@ -142,11 +162,11 @@ export default function NewContestPage() {
           description,
           status: contestFlowMode === "DIRECT_RATING" ? "RATING" : "SUBMISSION",
           allowParticipantUploads: contestFlowMode !== "DIRECT_RATING",
-          accessType,
+          accessType: contestFlowMode === "DIRECT_RATING" ? "INVITE_ONLY" : accessType,
           maxParticipants: maxParticipants ? parseInt(maxParticipants, 10) : null,
-          submissionStart,
-          submissionEnd,
-          ratingStart,
+          submissionStart: finalSubStart,
+          submissionEnd: finalSubEnd,
+          ratingStart: finalRatingStart,
           ratingEnd,
           votingMode,
           anonymousJudging,
@@ -171,7 +191,11 @@ export default function NewContestPage() {
         setErrorMessage(data.error || "Fehler beim Erstellen des Wettbewerbs");
         setIsSubmitting(false);
       } else {
-        router.push("/admin");
+        if (contestFlowMode === "DIRECT_RATING" && data.contest?.id) {
+          router.push(`/admin/contests/${data.contest.id}/submissions`);
+        } else {
+          router.push("/admin");
+        }
         router.refresh();
       }
     } catch {
@@ -265,12 +289,12 @@ export default function NewContestPage() {
                       type="radio"
                       name="contestFlowMode"
                       checked={contestFlowMode === "STANDARD"}
-                      onChange={() => setContestFlowMode("STANDARD")}
+                      onChange={() => handleFlowModeChange("STANDARD")}
                       className="accent-sky-500"
                     />
                   </div>
                   <p className="text-xs text-neutral-400 mt-2">
-                    Teilnehmer laden während der Einreichungsphase ihre eigenen Fotos hoch. Nach Ablauf der Frist beginnt die Jurierung.
+                    Teilnehmer laden während der Einreichungsphase ihre eigenen Fotos hoch. Nach Ablauf der Frist beginnt nahtlos die Jurierung.
                   </p>
                 </div>
               </label>
@@ -292,7 +316,7 @@ export default function NewContestPage() {
                       type="radio"
                       name="contestFlowMode"
                       checked={contestFlowMode === "DIRECT_RATING"}
-                      onChange={() => setContestFlowMode("DIRECT_RATING")}
+                      onChange={() => handleFlowModeChange("DIRECT_RATING")}
                       className="accent-purple-500"
                     />
                   </div>
@@ -312,105 +336,120 @@ export default function NewContestPage() {
             <h2 className="text-base font-semibold text-white">2. Teilnehmerzugang & Einladungen</h2>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <label
-              className={`flex flex-col justify-between rounded-xl border p-4 cursor-pointer transition ${
-                accessType === "OPEN"
-                  ? "border-sky-500 bg-sky-500/10"
-                  : "border-neutral-800 bg-neutral-950/60 hover:border-neutral-700"
-              }`}
-            >
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-sm text-white">Offener Link (Öffentlich)</span>
-                  <input
-                    type="radio"
-                    name="accessType"
-                    checked={accessType === "OPEN"}
-                    onChange={() => setAccessType("OPEN")}
-                    className="accent-sky-500"
-                  />
-                </div>
-                <p className="text-xs text-neutral-400 mt-2">
-                  Jeder mit dem Link kann teilnehmen, indem er sich mit Name & E-Mail anmeldet und Fotos hochlädt.
-                </p>
+          {contestFlowMode === "DIRECT_RATING" ? (
+            <div className="rounded-xl border border-purple-500/30 bg-purple-500/10 p-5 text-xs text-purple-200">
+              <div className="flex items-center gap-2 font-semibold text-sm text-purple-300 mb-1.5">
+                <ShieldCheck className="h-4 w-4" />
+                Direkte Jurierung aktiv: Keine Teilnehmer-Uploads erforderlich
               </div>
-            </label>
-
-            <label
-              className={`flex flex-col justify-between rounded-xl border p-4 cursor-pointer transition ${
-                accessType === "INVITE_ONLY"
-                  ? "border-amber-500 bg-amber-500/10"
-                  : "border-neutral-800 bg-neutral-950/60 hover:border-neutral-700"
-              }`}
-            >
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-sm text-white flex items-center gap-1.5">
-                    <Lock className="h-3.5 w-3.5 text-amber-400" />
-                    Geschlossen (Nur mit Einladung)
-                  </span>
-                  <input
-                    type="radio"
-                    name="accessType"
-                    checked={accessType === "INVITE_ONLY"}
-                    onChange={() => setAccessType("INVITE_ONLY")}
-                    className="accent-amber-500"
-                  />
-                </div>
-                <p className="text-xs text-neutral-400 mt-2">
-                  Nur Personen auf der Teilnehmerliste erhalten Zugang per personalisiertem Link / QR-Code.
-                </p>
-              </div>
-            </label>
-          </div>
-
-          <div className="pt-2">
-            <div>
-              <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-                Teilnehmer-Begrenzung (optional)
-              </label>
-              <input
-                type="number"
-                min={1}
-                value={maxParticipants}
-                onChange={(e) => setMaxParticipants(e.target.value)}
-                placeholder="z. B. 25 (leer lassen für unbegrenzt)"
-                className="w-full sm:w-1/2 rounded-xl border border-neutral-800 bg-neutral-950 px-3.5 py-2 text-sm text-white placeholder-neutral-500 focus:border-sky-500 focus:outline-none"
-              />
-              <span className="text-[11px] text-neutral-400 mt-1 block">
-                Maximale Gesamtanzahl an Personen, die am Wettbewerb teilnehmen dürfen.
-              </span>
+              <p className="leading-relaxed text-purple-300/80">
+                Bei direkter Jurierung gibt es keine Einreichungen durch normale Teilnehmer. Du lädst die Fotos nach dem Anlegen des Wettbewerbs als Administrator bequem im Gott-Modus vorab hoch.
+                Unten in <strong>Abschnitt 4</strong> wählst du direkt die Juroren aus, die zur Bewertung eingeladen werden.
+              </p>
             </div>
-          </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <label
+                  className={`flex flex-col justify-between rounded-xl border p-4 cursor-pointer transition ${
+                    accessType === "OPEN"
+                      ? "border-sky-500 bg-sky-500/10"
+                      : "border-neutral-800 bg-neutral-950/60 hover:border-neutral-700"
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-sm text-white">Offener Link (Öffentlich)</span>
+                      <input
+                        type="radio"
+                        name="accessType"
+                        checked={accessType === "OPEN"}
+                        onChange={() => setAccessType("OPEN")}
+                        className="accent-sky-500"
+                      />
+                    </div>
+                    <p className="text-xs text-neutral-400 mt-2">
+                      Jeder mit dem Link kann teilnehmen, indem er sich mit Name & E-Mail anmeldet und Fotos hochlädt.
+                    </p>
+                  </div>
+                </label>
 
-          {/* User Picker for existing registered users */}
-          <div className="pt-3 border-t border-neutral-800/80">
-            <UserPicker
-              label="Registrierte Benutzer als Teilnehmer auswählen"
-              description="Wähle direkt bestehende Benutzerkonten aus der Plattform aus. Diese Nutzer erhalten eine personalisierte Einladung ohne erneute Passwortvergabe."
-              selectedEmails={selectedParticipantUsers}
-              onChange={setSelectedParticipantUsers}
-              accentColor="sky"
-            />
-          </div>
+                <label
+                  className={`flex flex-col justify-between rounded-xl border p-4 cursor-pointer transition ${
+                    accessType === "INVITE_ONLY"
+                      ? "border-amber-500 bg-amber-500/10"
+                      : "border-neutral-800 bg-neutral-950/60 hover:border-neutral-700"
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-sm text-white flex items-center gap-1.5">
+                        <Lock className="h-3.5 w-3.5 text-amber-400" />
+                        Geschlossen (Nur mit Einladung)
+                      </span>
+                      <input
+                        type="radio"
+                        name="accessType"
+                        checked={accessType === "INVITE_ONLY"}
+                        onChange={() => setAccessType("INVITE_ONLY")}
+                        className="accent-amber-500"
+                      />
+                    </div>
+                    <p className="text-xs text-neutral-400 mt-2">
+                      Nur Personen auf der Teilnehmerliste erhalten Zugang per personalisiertem Link / QR-Code.
+                    </p>
+                  </div>
+                </label>
+              </div>
 
-          {/* Additional manual email addresses */}
-          <div className="pt-2">
-            <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-              Weitere externe E-Mail-Adressen (optional für noch nicht registrierte Personen)
-            </label>
-            <textarea
-              rows={2}
-              value={participantEmails}
-              onChange={(e) => setParticipantEmails(e.target.value)}
-              placeholder="neueteilnehmerin@mail.de, gast@mail.de (oder Zeile für Zeile)"
-              className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3.5 py-2 text-xs text-white placeholder-neutral-500 focus:border-sky-500 focus:outline-none font-mono"
-            />
-            <span className="text-[11px] text-neutral-400 mt-1 block">
-              Erzeugt automatische Einladungslinks und Einladungs-E-Mails zur Passwortvergabe für neue Personen.
-            </span>
-          </div>
+              <div className="pt-2">
+                <div>
+                  <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                    Teilnehmer-Begrenzung (optional)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={maxParticipants}
+                    onChange={(e) => setMaxParticipants(e.target.value)}
+                    placeholder="z. B. 25 (leer lassen für unbegrenzt)"
+                    className="w-full sm:w-1/2 rounded-xl border border-neutral-800 bg-neutral-950 px-3.5 py-2 text-sm text-white placeholder-neutral-500 focus:border-sky-500 focus:outline-none"
+                  />
+                  <span className="text-[11px] text-neutral-400 mt-1 block">
+                    Maximale Gesamtanzahl an Personen, die am Wettbewerb teilnehmen dürfen.
+                  </span>
+                </div>
+              </div>
+
+              {/* User Picker for existing registered users */}
+              <div className="pt-3 border-t border-neutral-800/80">
+                <UserPicker
+                  label="Registrierte Benutzer als Teilnehmer auswählen"
+                  description="Wähle direkt bestehende Benutzerkonten aus der Plattform aus. Diese Nutzer erhalten eine personalisierte Einladung ohne erneute Passwortvergabe."
+                  selectedEmails={selectedParticipantUsers}
+                  onChange={setSelectedParticipantUsers}
+                  accentColor="sky"
+                />
+              </div>
+
+              {/* Additional manual email addresses */}
+              <div className="pt-2">
+                <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                  Weitere externe E-Mail-Adressen (optional für noch nicht registrierte Personen)
+                </label>
+                <textarea
+                  rows={2}
+                  value={participantEmails}
+                  onChange={(e) => setParticipantEmails(e.target.value)}
+                  placeholder="neueteilnehmerin@mail.de, gast@mail.de (oder Zeile für Zeile)"
+                  className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3.5 py-2 text-xs text-white placeholder-neutral-500 focus:border-sky-500 focus:outline-none font-mono"
+                />
+                <span className="text-[11px] text-neutral-400 mt-1 block">
+                  Erzeugt automatische Einladungslinks und Einladungs-E-Mails zur Passwortvergabe für neue Personen.
+                </span>
+              </div>
+            </>
+          )}
         </div>
 
         {/* SECTION 3: Zeiträume & Fristen */}
@@ -420,62 +459,120 @@ export default function NewContestPage() {
             <h2 className="text-base font-semibold text-white">3. Fristen & Zeiträume</h2>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <div className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-4 space-y-3">
-              <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400 block">
-                Einreichungsphase
-              </span>
-              <div>
-                <label className="block text-[11px] text-neutral-400 mb-1">Beginn der Einreichung</label>
-                <input
-                  type="datetime-local"
-                  required
-                  value={submissionStart}
-                  onChange={(e) => setSubmissionStart(e.target.value)}
-                  className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-white"
-                />
+          {contestFlowMode === "DIRECT_RATING" ? (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4 text-xs text-purple-300 flex items-center gap-2.5">
+                <ShieldCheck className="h-4 w-4 shrink-0 text-purple-400" />
+                <span>
+                  <strong>Direkte Jurierung:</strong> Die Einreichungsphase entfällt. Die Fotos werden von dir vorab als Administrator eingespeist. Die Jurierung startet direkt.
+                </span>
               </div>
-              <div>
-                <label className="block text-[11px] text-neutral-400 mb-1">Ende der Einreichung (Deadline)</label>
-                <input
-                  type="datetime-local"
-                  required
-                  value={submissionEnd}
-                  onChange={(e) => {
-                    setSubmissionEnd(e.target.value);
-                    if (ratingStart < e.target.value) setRatingStart(e.target.value);
-                  }}
-                  className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-white"
-                />
-              </div>
-            </div>
 
-            <div className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-4 space-y-3">
-              <span className="text-xs font-semibold uppercase tracking-wider text-purple-400 block">
-                Jurierungsphase (0-10 Punkte)
-              </span>
-              <div>
-                <label className="block text-[11px] text-neutral-400 mb-1">Start der Bewertung</label>
-                <input
-                  type="datetime-local"
-                  required
-                  value={ratingStart}
-                  onChange={(e) => setRatingStart(e.target.value)}
-                  className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] text-neutral-400 mb-1">Ende der Bewertung (Ergebnis steht fest)</label>
-                <input
-                  type="datetime-local"
-                  required
-                  value={ratingEnd}
-                  onChange={(e) => setRatingEnd(e.target.value)}
-                  className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-white"
-                />
+              <div className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-4 space-y-3">
+                <span className="text-xs font-semibold uppercase tracking-wider text-purple-400 block">
+                  Jurierungsphase (0-10 Punkte)
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[11px] text-neutral-400 mb-1">Start der Bewertung</label>
+                    <input
+                      type="datetime-local"
+                      required
+                      value={ratingStart}
+                      onChange={(e) => setRatingStart(e.target.value)}
+                      className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-neutral-400 mb-1">Ende der Bewertung (Deadline)</label>
+                    <input
+                      type="datetime-local"
+                      required
+                      value={ratingEnd}
+                      onChange={(e) => setRatingEnd(e.target.value)}
+                      className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-white"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-4 space-y-3">
+                <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400 block">
+                  1. Einreichungsphase
+                </span>
+                <div>
+                  <label className="block text-[11px] text-neutral-400 mb-1">Beginn der Einreichung</label>
+                  <div className="rounded-lg border border-neutral-800 bg-neutral-900/80 px-3 py-2 text-xs text-neutral-300 flex items-center justify-between">
+                    <span className="text-neutral-400">Veröffentlichung:</span>
+                    <span className="font-semibold text-emerald-400 flex items-center gap-1">
+                      <CheckCircle className="h-3.5 w-3.5" />
+                      Sofort aktiv
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-neutral-500 mt-1 block">
+                    Die Einreichungsphase beginnt automatisch mit der Veröffentlichung.
+                  </span>
+                </div>
+                <div>
+                  <label className="block text-[11px] text-neutral-400 mb-1">Ende der Einreichung (Deadline) *</label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={submissionEnd}
+                    onChange={(e) => {
+                      const newEnd = e.target.value;
+                      setSubmissionEnd(newEnd);
+                      setRatingStart(newEnd);
+                      if (ratingEnd && ratingEnd <= newEnd) {
+                        const d = new Date(newEnd);
+                        d.setDate(d.getDate() + 7);
+                        setRatingEnd(d.toISOString().slice(0, 16));
+                      }
+                    }}
+                    className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-4 space-y-3">
+                <span className="text-xs font-semibold uppercase tracking-wider text-purple-400 block">
+                  2. Jurierungsphase (0-10 Punkte)
+                </span>
+                <div>
+                  <label className="block text-[11px] text-neutral-400 mb-1">Start der Bewertung</label>
+                  <div className="rounded-lg border border-neutral-800 bg-neutral-900/80 px-3 py-2 text-xs text-neutral-300 flex items-center justify-between">
+                    <span className="text-neutral-400">Nahtloser Übergang:</span>
+                    <span className="font-mono text-purple-300 font-medium text-[11px]">
+                      {submissionEnd
+                        ? new Date(submissionEnd).toLocaleString("de-DE", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "Nach Einreichungsende"}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-neutral-500 mt-1 block">
+                    Schließt direkt an die Einreichungs-Deadline an.
+                  </span>
+                </div>
+                <div>
+                  <label className="block text-[11px] text-neutral-400 mb-1">Ende der Bewertung (Ergebnis steht fest) *</label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={ratingEnd}
+                    onChange={(e) => setRatingEnd(e.target.value)}
+                    className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-white"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* SECTION 4: Bewertungssystem & Jury */}

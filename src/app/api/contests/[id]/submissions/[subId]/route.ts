@@ -41,11 +41,19 @@ export async function DELETE(
       );
     }
 
-    // Try deleting file from disk
+    // Try deleting file and preview thumbnail from disk
     try {
       const diskPath = path.join(process.cwd(), "public", submission.filePath.replace(/^\//, ""));
       if (fs.existsSync(diskPath)) {
         await fs.promises.unlink(diskPath);
+      }
+
+      if (submission.storedFilename) {
+        const baseFilename = path.parse(submission.storedFilename).name;
+        const thumbDiskPath = path.join(process.cwd(), "public", "uploads", "submissions", `thumb-${baseFilename}.webp`);
+        if (fs.existsSync(thumbDiskPath)) {
+          await fs.promises.unlink(thumbDiskPath);
+        }
       }
     } catch (e) {
       console.warn("Could not delete file from disk:", e);

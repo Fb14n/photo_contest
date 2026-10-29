@@ -158,20 +158,34 @@ export default function ContestDetailPage({
         </div>
 
         {isAdmin && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Link
-              href={`/admin/contests/${contest.id}/stats`}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1 text-xs text-neutral-200 hover:text-white hover:bg-neutral-700 transition"
+              href={`/admin/contests/${contest.id}/edit`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-300 hover:text-white hover:bg-amber-500/20 transition"
             >
-              <BarChart2 className="h-3.5 w-3.5 text-purple-400" />
-              Admin-Statistik
+              <Edit className="h-3.5 w-3.5" />
+              Wettbewerb bearbeiten
+            </Link>
+            <Link
+              href={`/admin/contests/${contest.id}/submissions`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-purple-500/40 bg-purple-500/10 px-2.5 py-1 text-xs font-semibold text-purple-300 hover:text-white hover:bg-purple-500/20 transition"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Fotos einspeisen (Gott-Modus)
             </Link>
             <Link
               href={`/admin/contests/${contest.id}/invites`}
               className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1 text-xs text-neutral-200 hover:text-white hover:bg-neutral-700 transition"
             >
               <Users className="h-3.5 w-3.5 text-sky-400" />
-              Einladungen & QR-Codes
+              Einladungen
+            </Link>
+            <Link
+              href={`/admin/contests/${contest.id}/stats`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1 text-xs text-neutral-200 hover:text-white hover:bg-neutral-700 transition"
+            >
+              <BarChart2 className="h-3.5 w-3.5 text-purple-400" />
+              Admin-Statistik
             </Link>
           </div>
         )}
@@ -217,7 +231,7 @@ export default function ContestDetailPage({
         </p>
 
         {/* Action Button Bar */}
-        <div className="mt-8 flex flex-wrap items-center gap-4 border-t border-neutral-800/80 pt-6">
+        <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-neutral-800/80 pt-6">
           {contest.effectiveStatus === "SUBMISSION" && (
             contest.allowParticipantUploads === false && !isAdmin ? (
               <div className="inline-flex items-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-2.5 text-xs font-medium text-sky-300">
@@ -241,25 +255,13 @@ export default function ContestDetailPage({
           )}
 
           {contest.effectiveStatus === "RATING" && (
-            <>
-              <Link
-                href={`/contests/${contest.slug}/judge`}
-                className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-purple-600/20 hover:bg-purple-500 transition"
-              >
-                <ShieldCheck className="h-4 w-4" />
-                Zur Jurierung (0–10 Punkte)
-              </Link>
-
-              {isAdmin && (
-                <Link
-                  href={`/contests/${contest.slug}/submit`}
-                  className="inline-flex items-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-2.5 text-xs font-semibold text-sky-300 hover:bg-sky-500/20 transition"
-                >
-                  <Camera className="h-4 w-4 text-sky-400" />
-                  Admin: Fotos hochladen
-                </Link>
-              )}
-            </>
+            <Link
+              href={`/contests/${contest.slug}/judge`}
+              className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-purple-600/20 hover:bg-purple-500 transition"
+            >
+              <ShieldCheck className="h-4 w-4" />
+              Zur Jurierung (0–10 Punkte)
+            </Link>
           )}
 
           {contest.effectiveStatus === "FINISHED" && (
@@ -277,6 +279,37 @@ export default function ContestDetailPage({
                 Wettbewerb abgeschlossen (Ergebnisse privat)
               </div>
             )
+          )}
+
+          {/* Admin Specific Action Buttons */}
+          {isAdmin && (
+            <>
+              <Link
+                href={`/admin/contests/${contest.id}/submissions`}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-purple-600/20 hover:bg-purple-500 transition"
+              >
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Admin: Fotos einspeisen (Gott-Modus)
+              </Link>
+
+              <Link
+                href={`/admin/contests/${contest.id}/edit`}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-neutral-700 bg-neutral-800 px-3.5 py-2.5 text-xs font-semibold text-neutral-200 hover:bg-neutral-700 hover:text-white transition"
+              >
+                <Edit className="h-3.5 w-3.5 text-amber-400" />
+                Wettbewerb bearbeiten
+              </Link>
+
+              {contest.effectiveStatus !== "SUBMISSION" && (
+                <Link
+                  href={`/contests/${contest.slug}/submit`}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-sky-500/30 bg-sky-500/10 px-3.5 py-2.5 text-xs font-medium text-sky-300 hover:bg-sky-500/20 transition"
+                >
+                  <Camera className="h-3.5 w-3.5 text-sky-400" />
+                  Regulär einreichen (Test)
+                </Link>
+              )}
+            </>
           )}
 
           {currentUser && (
@@ -495,14 +528,32 @@ export default function ContestDetailPage({
           {/* Quick Action Card (Phase-dependent) */}
           {contest.effectiveStatus === "SUBMISSION" && (
             <div className="rounded-2xl border border-sky-500/20 bg-gradient-to-b from-sky-500/5 to-transparent p-6">
-              <h3 className="text-sm font-semibold text-white mb-2">Einreichung aktiv</h3>
+              <h3 className="text-sm font-semibold text-white mb-2">
+                {contest.allowParticipantUploads === false ? "Vorbereitung / Uploads aktiv" : "Einreichung aktiv"}
+              </h3>
               <p className="text-xs text-neutral-400 mb-4">
-                {currentUser
+                {contest.allowParticipantUploads === false
+                  ? "Die Fotos für diesen Wettbewerb werden von der Administration bereitgestellt. Teilnehmer-Uploads sind deaktiviert."
+                  : currentUser
                   ? `Reiche deine besten Fotos zu den Themen ein. Angemeldet als ${currentUser.email}.`
                   : "Melde dich an, um eigene Fotos zu den Themen einzureichen."}
               </p>
 
-              {currentUser ? (
+              {isAdmin && (
+                <Link
+                  href={`/admin/contests/${contest.id}/submissions`}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-2.5 text-xs font-semibold text-white shadow-md shadow-purple-600/20 hover:bg-purple-500 transition mb-2.5"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  Admin: Fotos einspeisen (Gott-Modus)
+                </Link>
+              )}
+
+              {contest.allowParticipantUploads === false && !isAdmin ? (
+                <div className="w-full text-center rounded-xl border border-sky-500/20 bg-sky-500/5 px-4 py-2.5 text-xs font-medium text-sky-300">
+                  Jurierung startet in Kürze
+                </div>
+              ) : currentUser ? (
                 contest.accessType === "INVITE_ONLY" && !contest.isParticipant && !isAdmin ? (
                   <div className="w-full text-center rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs font-medium text-amber-300">
                     Geschlossener Wettbewerb

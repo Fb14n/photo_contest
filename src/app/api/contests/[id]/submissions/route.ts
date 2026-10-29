@@ -128,9 +128,12 @@ export async function GET(
         shutterSpeed: sub.shutterSpeed,
         takenAt: sub.takenAt,
         createdAt: sub.createdAt,
-        photographerName: anonymize ? "Anonymer Teilnehmer" : sub.user.name,
-        photographerEmail: anonymize ? undefined : sub.user.email,
-        isOwn: session ? sub.userId === session.userId : false,
+        photographerName: anonymize
+          ? "Anonymer Teilnehmer"
+          : (sub.user?.name || sub.submitterName || "Nicht zugewiesen"),
+        photographerEmail: anonymize ? undefined : (sub.user?.email || undefined),
+        userId: sub.userId,
+        isOwn: session && sub.userId ? sub.userId === session.userId : false,
         myRating,
         totalRatingsCount: sub._count.ratings,
       };
@@ -239,6 +242,9 @@ export async function POST(
     const topicId = formData.get("topicId") as string | null;
     const title = (formData.get("title") as string | null)?.trim() || "";
     const description = (formData.get("description") as string | null)?.trim() || null;
+    const isAdminFeed = formData.get("isAdminFeed") === "true" && isAdmin;
+    const assignUserId = (formData.get("assignUserId") as string | null)?.trim() || null;
+    const customSubmitterName = (formData.get("submitterName") as string | null)?.trim() || null;
 
     if (!file || !topicId || !title) {
       return NextResponse.json(
@@ -253,22 +259,51 @@ export async function POST(
       return NextResponse.json({ error: "Ungültiges Thema ausgewählt." }, { status: 400 });
     }
 
-    // Check submission count for this user in this topic
-    const existingCount = await prisma.submission.count({
-      where: {
-        contestId: contest.id,
-        topicId: topic.id,
-        userId: session.userId,
-      },
-    });
+    // Determine target user and submitter attribution
+    let targetUserId: string | null = session.userId;
+    let submitterName: string | null = null;
 
-    if (existingCount >= topic.maxSubmissionsPerUser && !isAdmin) {
-      return NextResponse.json(
-        {
-          error: `Du hast für das Thema "${topic.title}" bereits die maximale Anzahl an Bildern (${topic.maxSubmissionsPerUser}) eingereicht.`,
+    if (isAdminFeed) {
+      // Admin God-mode: assign to selected user, or unassigned/anonymous
+      if (assignUserId && assignUserId !== "none" && assignUserId !== "unassigned") {
+        const targetUser = await prisma.user.findUnique({ where: { id: assignUserId } });
+        if (targetUser) {
+          targetUserId = targetUser.id;
+          submitterName = customSubmitterName || targetUser.name;
+        } else {
+          targetUserId = null;
+          submitterName = customSubmitterName || "Nicht zugewiesen";
+        }
+      } else {
+        targetUserId = null;
+        submitterName = customSubmitterName || "Nicht zugewiesen";
+      }
+    } else {
+      // Regular participant submission (even if user is Admin, when participating normally)
+      if (!contest.allowParticipantUploads && !isAdmin) {
+        return NextResponse.json(
+          { error: "Für diesen Wettbewerb sind Einreichungen durch Teilnehmer deaktiviert." },
+          { status: 403 }
+        );
+      }
+
+      // Check submission count for this user in this topic
+      const existingCount = await prisma.submission.count({
+        where: {
+          contestId: contest.id,
+          topicId: topic.id,
+          userId: session.userId,
         },
-        { status: 400 }
-      );
+      });
+
+      if (existingCount >= topic.maxSubmissionsPerUser) {
+        return NextResponse.json(
+          {
+            error: `Du hast für das Thema "${topic.title}" bereits die maximale Anzahl an Bildern (${topic.maxSubmissionsPerUser}) eingereicht.`,
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const arrayBuffer = await file.arrayBuffer();
@@ -340,7 +375,8 @@ export async function POST(
       data: {
         contestId: contest.id,
         topicId: topic.id,
-        userId: session.userId,
+        userId: targetUserId,
+        submitterName,
         title,
         description,
         originalFilename: file.name,

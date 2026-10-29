@@ -281,7 +281,11 @@ export default function HomePage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {contests.slice(0, 6).map((c) => (
-                <ContestCard key={c.id} contest={c} />
+                <ContestCard
+                  key={c.id}
+                  contest={c}
+                  isAdmin={currentUser?.role === "ADMIN"}
+                />
               ))}
             </div>
           )}

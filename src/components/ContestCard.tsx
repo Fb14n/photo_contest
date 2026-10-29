@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ContestEffectiveStatus, getStatusBadgeInfo } from "@/lib/contest-status";
-import { Calendar, Users, Image as ImageIcon, Award, ArrowRight, ShieldCheck, Lock } from "lucide-react";
+import { Calendar, Users, Image as ImageIcon, Award, ArrowRight, ShieldCheck, Lock, Edit } from "lucide-react";
 
 export interface ContestCardData {
   id: string;
@@ -28,7 +28,13 @@ export interface ContestCardData {
   };
 }
 
-export default function ContestCard({ contest }: { contest: ContestCardData }) {
+export default function ContestCard({
+  contest,
+  isAdmin = false,
+}: {
+  contest: ContestCardData;
+  isAdmin?: boolean;
+}) {
   const badge = getStatusBadgeInfo(contest.effectiveStatus);
 
   const formatDate = (d: string | Date) => {
@@ -108,6 +114,17 @@ export default function ContestCard({ contest }: { contest: ContestCardData }) {
         </div>
 
         <div className="flex items-center gap-2">
+          {isAdmin && (
+            <Link
+              href={`/admin/contests/${contest.id}/edit`}
+              title="Wettbewerb bearbeiten"
+              className="inline-flex items-center gap-1 rounded-xl border border-neutral-700 bg-neutral-800 px-2.5 py-1.5 text-xs font-medium text-neutral-300 hover:text-white hover:bg-neutral-700 transition"
+            >
+              <Edit className="h-3.5 w-3.5 text-amber-400" />
+              <span>Bearbeiten</span>
+            </Link>
+          )}
+
           {contest.effectiveStatus === "SUBMISSION" && (
             contest.accessType === "INVITE_ONLY" && !contest.isParticipant ? (
               <Link

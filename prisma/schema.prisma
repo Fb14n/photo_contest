@@ -110,7 +110,8 @@ model Submission {
   id               String    @id @default(cuid())
   contestId        String
   topicId          String
-  userId           String
+  userId           String?
+  submitterName    String?
   title            String
   description      String?
   originalFilename String
@@ -133,7 +134,7 @@ model Submission {
 
   contest          Contest   @relation(fields: [contestId], references: [id], onDelete: Cascade)
   topic            Topic     @relation(fields: [topicId], references: [id], onDelete: Cascade)
-  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user             User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
   ratings          Rating[]
 
   createdAt        DateTime  @default(now())

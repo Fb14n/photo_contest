@@ -14,6 +14,7 @@ import {
   Info,
   Calendar,
   Lock,
+  ShieldCheck,
 } from "lucide-react";
 import ImageUploadZone, { UploadRules, TopicItem } from "@/components/ImageUploadZone";
 import ConfirmModal from "@/components/ConfirmModal";
@@ -252,6 +253,28 @@ export default function SubmitPhotoPage({
               Die Einreichungsfrist für diesen Wettbewerb ist momentan nicht aktiv (Status: {contest.effectiveStatus}).
               Einreichungen sind deaktiviert.
             </span>
+          </div>
+        )}
+
+        {currentUser.role === "ADMIN" && (
+          <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-purple-500/30 bg-purple-500/10 p-4 text-xs text-purple-200">
+            <div className="flex items-center gap-2.5">
+              <ShieldCheck className="h-5 w-5 text-purple-400 shrink-0" />
+              <div>
+                <p className="font-semibold text-purple-300">Admin-Teilnahmemodus</p>
+                <p className="text-purple-300/80 mt-0.5">
+                  Du nimmst hier regulär mit deinem persönlichen Admin-Account unter den Wettbewerbsregeln teil.
+                  Möchtest du stattdessen unbegrenzt viele Fotos im Gott-Modus einspeisen oder anderen Nutzern zuweisen?
+                </p>
+              </div>
+            </div>
+            <Link
+              href={`/admin/contests/${contest.id}/submissions`}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-purple-600 px-4 py-2 font-bold text-white hover:bg-purple-500 transition shrink-0"
+            >
+              <ShieldCheck className="h-4 w-4" />
+              Zur Gott-Modus Einspeisung
+            </Link>
           </div>
         )}
 
