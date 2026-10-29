@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthSession } from "@/lib/auth";
 import { getEffectiveStatus } from "@/lib/contest-status";
+import fs from "fs";
+import path from "path";
 
 export async function GET(
   req: Request,
@@ -38,6 +40,17 @@ export async function GET(
       );
     }
 
+    // If contest has publicResults disabled, only Admins can view results!
+    if (!isAdmin && !contest.publicResults) {
+      return NextResponse.json(
+        {
+          error: "Die Rangliste und Ergebnisse dieses Wettbewerbs werden exklusiv durch die Wettbewerbsleitung ausgewertet und sind nicht öffentlich freigegeben.",
+          restricted: true,
+        },
+        { status: 403 }
+      );
+    }
+
     // Fetch all submissions with ratings
     const submissions = await prisma.submission.findMany({
       where: { contestId: contest.id },
@@ -53,6 +66,7 @@ export async function GET(
     });
 
     const totalSubmissionsCount = submissions.length;
+    const uploadsDir = path.join(process.cwd(), "public", "uploads", "submissions");
 
     // Calculate score metrics for each submission
     const scoredSubmissions = submissions.map((sub) => {
@@ -63,11 +77,17 @@ export async function GET(
       const minScore = voteCount > 0 ? Math.min(...scores) : 0;
       const maxScore = voteCount > 0 ? Math.max(...scores) : 0;
 
+      const baseFilename = path.parse(sub.storedFilename).name;
+      const thumbFile = `thumb-${baseFilename}.webp`;
+      const hasThumb = fs.existsSync(path.join(uploadsDir, thumbFile));
+      const thumbnailUrl = hasThumb ? `/uploads/submissions/${thumbFile}` : sub.filePath;
+
       return {
         id: sub.id,
         title: sub.title,
         description: sub.description,
         filePath: sub.filePath,
+        thumbnailUrl,
         width: sub.width,
         height: sub.height,
         aspectRatio: sub.aspectRatio,

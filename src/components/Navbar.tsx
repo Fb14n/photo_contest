@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Camera, Shield, User as UserIcon, LogOut, Award, PlusCircle, KeyRound, Users } from "lucide-react";
+import { Camera, Shield, User as UserIcon, LogOut, Award, PlusCircle, KeyRound, Users, Settings } from "lucide-react";
 
 interface UserSession {
   userId: string;
@@ -88,6 +88,17 @@ export default function Navbar() {
                 Nutzerverwaltung
               </Link>
               <Link
+                href="/admin/settings"
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors ${
+                  pathname === "/admin/settings"
+                    ? "text-purple-400 bg-purple-500/10"
+                    : "text-neutral-300 hover:text-white hover:bg-neutral-900"
+                }`}
+              >
+                <Settings className="h-4 w-4" />
+                Einstellungen
+              </Link>
+              <Link
                 href="/admin/contests/new"
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors ${
                   pathname === "/admin/contests/new"
@@ -151,6 +162,13 @@ export default function Navbar() {
                       >
                         <Users className="h-4 w-4 text-purple-400" />
                         Nutzerverwaltung
+                      </Link>
+                      <Link
+                        href="/admin/settings"
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-neutral-300 hover:bg-neutral-800 hover:text-white transition"
+                      >
+                        <Settings className="h-4 w-4 text-purple-400" />
+                        Einstellungen & Gate
                       </Link>
                     </>
                   )}

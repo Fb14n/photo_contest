@@ -20,6 +20,7 @@ export interface ContestCardData {
   votingMode: string;
   isParticipant?: boolean;
   isJuror?: boolean;
+  publicResults?: boolean;
   _count?: {
     submissions: number;
     participants: number;
@@ -127,23 +128,42 @@ export default function ContestCard({ contest }: { contest: ContestCardData }) {
           )}
 
           {contest.effectiveStatus === "RATING" && (
-            <Link
-              href={`/contests/${contest.slug}/judge`}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-md shadow-purple-600/20 hover:bg-purple-500 transition"
-            >
-              <ShieldCheck className="h-3.5 w-3.5" />
-              Jurieren (0-10)
-            </Link>
+            contest.votingMode === "PEER_REVIEW" || contest.isJuror ? (
+              <Link
+                href={`/contests/${contest.slug}/judge`}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-md shadow-purple-600/20 hover:bg-purple-500 transition"
+              >
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Jurieren (0–10)
+              </Link>
+            ) : (
+              <Link
+                href={`/contests/${contest.slug}`}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-purple-500/30 bg-purple-500/10 px-3.5 py-1.5 text-xs font-medium text-purple-300 hover:bg-purple-500/20 transition"
+              >
+                In Bewertung
+              </Link>
+            )
           )}
 
           {contest.effectiveStatus === "FINISHED" && (
-            <Link
-              href={`/contests/${contest.slug}/results`}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-md shadow-emerald-600/20 hover:bg-emerald-500 transition"
-            >
-              <Award className="h-3.5 w-3.5" />
-              Rangliste & Sieger
-            </Link>
+            contest.publicResults !== false ? (
+              <Link
+                href={`/contests/${contest.slug}/results`}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-md shadow-emerald-600/20 hover:bg-emerald-500 transition"
+              >
+                <Award className="h-3.5 w-3.5" />
+                Rangliste & Sieger
+              </Link>
+            ) : (
+              <Link
+                href={`/contests/${contest.slug}`}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-neutral-800 bg-neutral-900 px-3.5 py-1.5 text-xs font-medium text-neutral-400 hover:text-white transition"
+              >
+                <Lock className="h-3 w-3" />
+                Beendet
+              </Link>
+            )
           )}
 
           {contest.effectiveStatus !== "SUBMISSION" &&

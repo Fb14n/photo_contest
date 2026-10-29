@@ -20,6 +20,7 @@ import {
   SlidersHorizontal,
   Edit,
   BarChart2,
+  Camera,
 } from "lucide-react";
 import { getStatusBadgeInfo, ContestEffectiveStatus } from "@/lib/contest-status";
 
@@ -28,6 +29,7 @@ interface Topic {
   title: string;
   description?: string | null;
   maxSubmissionsPerUser: number;
+  userSubmissionCount?: number;
 }
 
 interface ContestDetail {
@@ -46,6 +48,8 @@ interface ContestDetail {
   ratingEnd: string;
   votingMode: "PEER_REVIEW" | "EXCLUSIVE_JURY";
   anonymousJudging: boolean;
+  publicResults?: boolean;
+  allowParticipantUploads?: boolean;
   maxFileSizeMb: number;
   allowedFormats: string;
   minWidth?: number | null;
@@ -57,6 +61,7 @@ interface ContestDetail {
   topics: Topic[];
   isParticipant?: boolean;
   isJuror?: boolean;
+  userTotalSubmissions?: number;
   _count?: {
     submissions: number;
     participants: number;
@@ -214,7 +219,12 @@ export default function ContestDetailPage({
         {/* Action Button Bar */}
         <div className="mt-8 flex flex-wrap items-center gap-4 border-t border-neutral-800/80 pt-6">
           {contest.effectiveStatus === "SUBMISSION" && (
-            contest.accessType === "INVITE_ONLY" && !contest.isParticipant && !isAdmin ? (
+            contest.allowParticipantUploads === false && !isAdmin ? (
+              <div className="inline-flex items-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-2.5 text-xs font-medium text-sky-300">
+                <Camera className="h-4 w-4 text-sky-400" />
+                Fotos werden von der Administration bereitgestellt (Teilnehmer-Uploads deaktiviert)
+              </div>
+            ) : contest.accessType === "INVITE_ONLY" && !contest.isParticipant && !isAdmin ? (
               <div className="inline-flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs font-medium text-amber-300">
                 <Lock className="h-4 w-4 text-amber-400" />
                 Geschlossener Wettbewerb (Nur für geladene Teilnehmer)
@@ -231,23 +241,52 @@ export default function ContestDetailPage({
           )}
 
           {contest.effectiveStatus === "RATING" && (
-            <Link
-              href={`/contests/${contest.slug}/judge`}
-              className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-purple-600/20 hover:bg-purple-500 transition"
-            >
-              <ShieldCheck className="h-4 w-4" />
-              Zur Jurierung (0–10 Punkte)
-            </Link>
+            <>
+              <Link
+                href={`/contests/${contest.slug}/judge`}
+                className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-purple-600/20 hover:bg-purple-500 transition"
+              >
+                <ShieldCheck className="h-4 w-4" />
+                Zur Jurierung (0–10 Punkte)
+              </Link>
+
+              {isAdmin && (
+                <Link
+                  href={`/contests/${contest.slug}/submit`}
+                  className="inline-flex items-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-2.5 text-xs font-semibold text-sky-300 hover:bg-sky-500/20 transition"
+                >
+                  <Camera className="h-4 w-4 text-sky-400" />
+                  Admin: Fotos hochladen
+                </Link>
+              )}
+            </>
           )}
 
           {contest.effectiveStatus === "FINISHED" && (
-            <Link
-              href={`/contests/${contest.slug}/results`}
-              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-500 transition"
-            >
-              <Award className="h-4 w-4" />
-              Sieger & Rangliste ansehen
-            </Link>
+            contest.publicResults !== false || isAdmin ? (
+              <Link
+                href={`/contests/${contest.slug}/results`}
+                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-500 transition"
+              >
+                <Award className="h-4 w-4" />
+                Sieger & Rangliste ansehen
+              </Link>
+            ) : (
+              <div className="inline-flex items-center gap-2 rounded-xl border border-neutral-700 bg-neutral-800/80 px-4 py-2.5 text-xs font-medium text-neutral-300">
+                <Lock className="h-4 w-4 text-neutral-400" />
+                Wettbewerb abgeschlossen (Ergebnisse privat)
+              </div>
+            )
+          )}
+
+          {currentUser && (
+            <div className="inline-flex items-center gap-1.5 rounded-xl border border-sky-500/20 bg-sky-500/10 px-3.5 py-2 text-xs font-medium text-sky-300">
+              <Camera className="h-4 w-4 text-sky-400" />
+              <span>
+                Deine Einreichungen: <strong>{contest.userTotalSubmissions ?? 0}</strong>{" "}
+                {(contest.userTotalSubmissions ?? 0) === 1 ? "Bild" : "Bilder"} eingereicht
+              </span>
+            </div>
           )}
 
           <div className="flex items-center gap-4 text-xs text-neutral-400 ml-auto">
@@ -284,28 +323,68 @@ export default function ContestDetailPage({
             </p>
 
             <div className="space-y-4">
-              {contest.topics.map((topic, index) => (
-                <div
-                  key={topic.id}
-                  className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-4 transition hover:border-neutral-700"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2.5">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-sky-500/10 text-xs font-bold text-sky-400">
-                        {index + 1}
-                      </span>
-                      <h3 className="text-sm font-semibold text-white">{topic.title}</h3>
-                    </div>
-                    <span className="rounded-md border border-neutral-800 bg-neutral-900 px-2 py-0.5 text-[11px] text-neutral-400">
-                      Max. {topic.maxSubmissionsPerUser} {topic.maxSubmissionsPerUser === 1 ? "Bild" : "Bilder"} pro Person
-                    </span>
-                  </div>
+              {contest.topics.map((topic, index) => {
+                const userCount = topic.userSubmissionCount ?? 0;
+                const isFull = userCount >= topic.maxSubmissionsPerUser;
+                const percent = Math.min(100, Math.round((userCount / topic.maxSubmissionsPerUser) * 100));
 
-                  {topic.description && (
-                    <p className="mt-2 text-xs text-neutral-400 pl-8">{topic.description}</p>
-                  )}
-                </div>
-              ))}
+                return (
+                  <div
+                    key={topic.id}
+                    className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-4 transition hover:border-neutral-700"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-sky-500/10 text-xs font-bold text-sky-400">
+                          {index + 1}
+                        </span>
+                        <h3 className="text-sm font-semibold text-white">{topic.title}</h3>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 sm:self-auto self-start pl-8 sm:pl-0">
+                        {currentUser && (
+                          <span
+                            className={`rounded-md border px-2.5 py-0.5 text-[11px] font-medium flex items-center gap-1.5 ${
+                              isFull
+                                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 font-semibold"
+                                : userCount > 0
+                                ? "border-sky-500/30 bg-sky-500/10 text-sky-400"
+                                : "border-neutral-800 bg-neutral-900/80 text-neutral-400"
+                            }`}
+                          >
+                            {isFull && <CheckCircle2 className="h-3 w-3 text-emerald-400" />}
+                            <span>
+                              {userCount} von {topic.maxSubmissionsPerUser} von dir eingereicht
+                              {isFull && " (Voll)"}
+                            </span>
+                          </span>
+                        )}
+
+                        <span className="rounded-md border border-neutral-800 bg-neutral-900 px-2 py-0.5 text-[11px] text-neutral-400">
+                          Max. {topic.maxSubmissionsPerUser} {topic.maxSubmissionsPerUser === 1 ? "Bild" : "Bilder"} pro Person
+                        </span>
+                      </div>
+                    </div>
+
+                    {topic.description && (
+                      <p className="mt-2 text-xs text-neutral-400 pl-8">{topic.description}</p>
+                    )}
+
+                    {currentUser && (
+                      <div className="mt-3 pl-8 pr-1">
+                        <div className="w-full bg-neutral-900 h-1.5 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full transition-all duration-300 ${
+                              isFull ? "bg-emerald-500" : "bg-sky-500"
+                            }`}
+                            style={{ width: `${percent}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -413,31 +492,123 @@ export default function ContestDetailPage({
             </ul>
           </div>
 
-          {/* Quick Action Card */}
-          <div className="rounded-2xl border border-sky-500/20 bg-gradient-to-b from-sky-500/5 to-transparent p-6">
-            <h3 className="text-sm font-semibold text-white mb-2">Bereit zum Mitmachen?</h3>
-            <p className="text-xs text-neutral-400 mb-4">
-              {currentUser
-                ? `Du bist angemeldet als ${currentUser.email}.`
-                : "Melde dich an oder registriere dich kostenfrei, um eigene Fotos einzureichen."}
-            </p>
+          {/* Quick Action Card (Phase-dependent) */}
+          {contest.effectiveStatus === "SUBMISSION" && (
+            <div className="rounded-2xl border border-sky-500/20 bg-gradient-to-b from-sky-500/5 to-transparent p-6">
+              <h3 className="text-sm font-semibold text-white mb-2">Einreichung aktiv</h3>
+              <p className="text-xs text-neutral-400 mb-4">
+                {currentUser
+                  ? `Reiche deine besten Fotos zu den Themen ein. Angemeldet als ${currentUser.email}.`
+                  : "Melde dich an, um eigene Fotos zu den Themen einzureichen."}
+              </p>
 
-            {currentUser ? (
-              <Link
-                href={`/contests/${contest.slug}/submit`}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-sky-500 px-4 py-2.5 text-xs font-semibold text-white shadow-md shadow-sky-500/20 hover:bg-sky-400 transition"
-              >
-                Bild einreichen
-              </Link>
-            ) : (
-              <Link
-                href="/login"
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-neutral-800 px-4 py-2.5 text-xs font-semibold text-white hover:bg-neutral-700 transition"
-              >
-                Jetzt Anmelden / Registrieren
-              </Link>
-            )}
-          </div>
+              {currentUser ? (
+                contest.accessType === "INVITE_ONLY" && !contest.isParticipant && !isAdmin ? (
+                  <div className="w-full text-center rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs font-medium text-amber-300">
+                    Geschlossener Wettbewerb
+                  </div>
+                ) : (
+                  <Link
+                    href={`/contests/${contest.slug}/submit`}
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-sky-500 px-4 py-2.5 text-xs font-semibold text-white shadow-md shadow-sky-500/20 hover:bg-sky-400 transition"
+                  >
+                    Foto jetzt einreichen
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                )
+              ) : (
+                <Link
+                  href="/login"
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-neutral-800 px-4 py-2.5 text-xs font-semibold text-white hover:bg-neutral-700 transition"
+                >
+                  Jetzt Anmelden / Registrieren
+                </Link>
+              )}
+            </div>
+          )}
+
+          {contest.effectiveStatus === "RATING" && (
+            <div className="rounded-2xl border border-purple-500/30 bg-gradient-to-b from-purple-500/10 to-transparent p-6">
+              <div className="flex items-center gap-2 text-purple-400 mb-2">
+                <ShieldCheck className="h-4 w-4" />
+                <h3 className="text-sm font-semibold text-white">Jurierungsphase aktiv</h3>
+              </div>
+              <p className="text-xs text-neutral-400 mb-4">
+                Die Einreichungsfrist ist beendet. Die eingereichten Fotos werden nun von der Fach-Jury bewertet.
+              </p>
+
+              {contest.isJuror || isAdmin ? (
+                <Link
+                  href={`/contests/${contest.slug}/judge`}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-2.5 text-xs font-semibold text-white shadow-md shadow-purple-600/20 hover:bg-purple-500 transition"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  Zur Jurierung (0–10 Punkte)
+                </Link>
+              ) : (
+                <div className="w-full text-center rounded-xl border border-purple-500/20 bg-purple-500/5 px-4 py-2 text-xs font-medium text-purple-300">
+                  Jurierung läuft
+                </div>
+              )}
+            </div>
+          )}
+
+          {contest.effectiveStatus === "FINISHED" && (
+            <div className="rounded-2xl border border-emerald-500/30 bg-gradient-to-b from-emerald-500/10 to-transparent p-6">
+              <div className="flex items-center gap-2 text-emerald-400 mb-2">
+                <Award className="h-4 w-4" />
+                <h3 className="text-sm font-semibold text-white">Wettbewerb beendet</h3>
+              </div>
+              <p className="text-xs text-neutral-400 mb-4">
+                {contest.publicResults !== false || isAdmin
+                  ? "Alle Bewertungen sind abgeschlossen. Entdecke jetzt die Sieger und die finale Rangliste!"
+                  : "Die Bewertungen wurden abgeschlossen. Die Ergebnisse werden exklusiv durch die Wettbewerbsleitung ausgewertet."}
+              </p>
+
+              {contest.publicResults !== false || isAdmin ? (
+                <Link
+                  href={`/contests/${contest.slug}/results`}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white shadow-md shadow-emerald-600/20 hover:bg-emerald-500 transition"
+                >
+                  <Award className="h-3.5 w-3.5" />
+                  Sieger & Rangliste ansehen
+                </Link>
+              ) : (
+                <div className="w-full text-center rounded-xl border border-neutral-800 bg-neutral-900/60 px-4 py-2.5 text-xs font-medium text-neutral-400">
+                  Ergebnisse privat (nur Admin)
+                </div>
+              )}
+            </div>
+          )}
+
+          {contest.effectiveStatus === "UPCOMING" && (
+            <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-b from-amber-500/10 to-transparent p-6">
+              <div className="flex items-center gap-2 text-amber-400 mb-2">
+                <Clock className="h-4 w-4" />
+                <h3 className="text-sm font-semibold text-white">Startet in Kürze</h3>
+              </div>
+              <p className="text-xs text-neutral-400 mb-4">
+                Die Einreichungsphase beginnt am {new Date(contest.submissionStart).toLocaleDateString("de-DE")}.
+              </p>
+              {!currentUser && (
+                <Link
+                  href="/register"
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-neutral-800 px-4 py-2.5 text-xs font-semibold text-white hover:bg-neutral-700 transition"
+                >
+                  Jetzt registrieren
+                </Link>
+              )}
+            </div>
+          )}
+
+          {(contest.effectiveStatus === "DRAFT" || contest.effectiveStatus === "ARCHIVED") && (
+            <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-6">
+              <h3 className="text-sm font-semibold text-white mb-2">Wettbewerb nicht aktiv</h3>
+              <p className="text-xs text-neutral-400">
+                Dieser Wettbewerb ist derzeit als {contest.effectiveStatus === "DRAFT" ? "Entwurf" : "Archiviert"} markiert.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

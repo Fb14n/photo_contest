@@ -27,6 +27,7 @@ interface UserSubmission {
   title: string;
   description?: string | null;
   filePath: string;
+  thumbnailUrl?: string;
   width: number;
   height: number;
   aspectRatio?: string | null;
@@ -281,7 +282,7 @@ export default function ProfilePage() {
                     <div className="relative aspect-[4/3] w-full overflow-hidden bg-neutral-950">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={sub.filePath}
+                        src={sub.thumbnailUrl || sub.filePath}
                         alt={sub.title}
                         className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />

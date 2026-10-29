@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthSession } from "@/lib/auth";
 import { getEffectiveStatus } from "@/lib/contest-status";
+import fs from "fs";
+import path from "path";
 
 export async function GET() {
   try {
@@ -97,23 +99,33 @@ export async function GET() {
       inviteToken: j.inviteToken,
     }));
 
-    const formattedSubmissions = submissions.map((s) => ({
-      id: s.id,
-      title: s.title,
-      description: s.description,
-      filePath: s.filePath,
-      width: s.width,
-      height: s.height,
-      aspectRatio: s.aspectRatio,
-      fileSize: s.fileSize,
-      createdAt: s.createdAt,
-      contestId: s.contest.id,
-      contestTitle: s.contest.title,
-      contestSlug: s.contest.slug,
-      contestStatus: getEffectiveStatus(s.contest),
-      topicTitle: s.topic.title,
-      ratingsCount: s._count.ratings,
-    }));
+    const uploadsDir = path.join(process.cwd(), "public", "uploads", "submissions");
+
+    const formattedSubmissions = submissions.map((s) => {
+      const baseFilename = path.parse(s.storedFilename).name;
+      const thumbFile = `thumb-${baseFilename}.webp`;
+      const hasThumb = fs.existsSync(path.join(uploadsDir, thumbFile));
+      const thumbnailUrl = hasThumb ? `/uploads/submissions/${thumbFile}` : s.filePath;
+
+      return {
+        id: s.id,
+        title: s.title,
+        description: s.description,
+        filePath: s.filePath,
+        thumbnailUrl,
+        width: s.width,
+        height: s.height,
+        aspectRatio: s.aspectRatio,
+        fileSize: s.fileSize,
+        createdAt: s.createdAt,
+        contestId: s.contest.id,
+        contestTitle: s.contest.title,
+        contestSlug: s.contest.slug,
+        contestStatus: getEffectiveStatus(s.contest),
+        topicTitle: s.topic.title,
+        ratingsCount: s._count.ratings,
+      };
+    });
 
     return NextResponse.json({
       submissions: formattedSubmissions,

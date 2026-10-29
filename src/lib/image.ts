@@ -228,3 +228,15 @@ export function validateImageRules(
     errors,
   };
 }
+
+export async function createOptimizedPreview(
+  inputBuffer: Buffer,
+  outputPath: string,
+  maxWidth = 1200
+): Promise<void> {
+  await sharp(inputBuffer)
+    .rotate()
+    .resize({ width: maxWidth, height: maxWidth, fit: "inside", withoutEnlargement: true })
+    .webp({ quality: 82, effort: 3 })
+    .toFile(outputPath);
+}

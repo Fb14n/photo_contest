@@ -2,7 +2,7 @@
 
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { Award, ArrowLeft, AlertCircle, Clock, BarChart3, Users } from "lucide-react";
+import { Award, ArrowLeft, AlertCircle, Clock, BarChart3, Users, Lock } from "lucide-react";
 import StatsView from "@/components/StatsView";
 
 export default function ContestResultsPage({
@@ -60,14 +60,21 @@ export default function ContestResultsPage({
   }
 
   if (error || !stats || !contest) {
+    const isRestricted = contest && !contest.publicResults && currentUser?.role !== "ADMIN";
     return (
       <div className="mx-auto max-w-lg px-4 py-20 text-center">
-        <div className="h-14 w-14 rounded-2xl bg-amber-500/10 text-amber-400 flex items-center justify-center mx-auto mb-4">
-          <Clock className="h-7 w-7" />
+        <div className={`h-14 w-14 rounded-2xl flex items-center justify-center mx-auto mb-4 ${
+          isRestricted ? "bg-purple-500/10 text-purple-400" : "bg-amber-500/10 text-amber-400"
+        }`}>
+          {isRestricted ? <Lock className="h-7 w-7" /> : <Clock className="h-7 w-7" />}
         </div>
-        <h2 className="text-xl font-bold text-white mb-2">Rangliste noch nicht verfügbar</h2>
+        <h2 className="text-xl font-bold text-white mb-2">
+          {isRestricted ? "Ergebnisse nicht öffentlich" : "Rangliste noch nicht verfügbar"}
+        </h2>
         <p className="text-sm text-neutral-400 mb-6">
-          {error || "Die Ergebnisse werden erst nach Abschluss der Bewertungsphase freigeschaltet."}
+          {isRestricted
+            ? "Die Auswertung und Rangliste dieses Wettbewerbs wird exklusiv durch die Wettbewerbsleitung eingesehen und ist nicht für Teilnehmer freigegeben."
+            : error || "Die Ergebnisse werden erst nach Abschluss der Bewertungsphase freigeschaltet."}
         </p>
         <Link
           href={`/contests/${resolvedParams.slug}`}

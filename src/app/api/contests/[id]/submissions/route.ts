@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthSession } from "@/lib/auth";
-import { inspectImageBuffer, validateImageRules } from "@/lib/image";
+import { inspectImageBuffer, validateImageRules, createOptimizedPreview } from "@/lib/image";
 import { getEffectiveStatus } from "@/lib/contest-status";
 import fs from "fs";
 import path from "path";
@@ -26,25 +26,45 @@ export async function GET(
 
     const effectiveStatus = getEffectiveStatus(contest);
 
+    const { searchParams } = new URL(req.url);
+    const onlyMine = searchParams.get("mine") === "true";
+    const forJudging = searchParams.get("forJudging") === "true";
+
     // Filter logic
     let whereClause: Record<string, unknown> = { contestId: contest.id };
 
-    if (!isAdmin) {
-      if (effectiveStatus === "DRAFT") {
+    if (onlyMine) {
+      // Explicitly requested only own submissions (e.g. upload page)
+      if (!session) {
         return NextResponse.json({ submissions: [] });
       }
+      whereClause = {
+        contestId: contest.id,
+        userId: session.userId,
+      };
+    } else {
+      // If evaluating in jury room, exclude current user's own submissions
+      if ((forJudging || effectiveStatus === "RATING") && session) {
+        whereClause.userId = { not: session.userId };
+      }
 
-      if (effectiveStatus === "SUBMISSION" || effectiveStatus === "UPCOMING") {
-        // Only return current user's submissions
-        if (!session) {
+      if (!isAdmin) {
+        if (effectiveStatus === "DRAFT") {
           return NextResponse.json({ submissions: [] });
         }
-        whereClause = {
-          contestId: contest.id,
-          userId: session.userId,
-        };
+
+        if (effectiveStatus === "SUBMISSION" || effectiveStatus === "UPCOMING") {
+          // Only return current user's submissions
+          if (!session) {
+            return NextResponse.json({ submissions: [] });
+          }
+          whereClause = {
+            contestId: contest.id,
+            userId: session.userId,
+          };
+        }
+        // In FINISHED phase, juror or participant can see all submissions
       }
-      // In RATING or FINISHED phase, juror or participant can see all submissions
     }
 
     const submissions = await prisma.submission.findMany({
@@ -75,8 +95,16 @@ export async function GET(
       contest.anonymousJudging &&
       (effectiveStatus === "RATING" || contest.status === "RATING");
 
+    const uploadsDir = path.join(process.cwd(), "public", "uploads", "submissions");
+
     const sanitized = submissions.map((sub) => {
       const myRating = Array.isArray(sub.ratings) && sub.ratings.length > 0 ? sub.ratings[0] : null;
+
+      // Check if optimized thumbnail exists
+      const baseFilename = path.parse(sub.storedFilename).name;
+      const thumbFile = `thumb-${baseFilename}.webp`;
+      const hasThumb = fs.existsSync(path.join(uploadsDir, thumbFile));
+      const thumbnailUrl = hasThumb ? `/uploads/submissions/${thumbFile}` : sub.filePath;
 
       return {
         id: sub.id,
@@ -86,6 +114,7 @@ export async function GET(
         title: sub.title,
         description: sub.description,
         filePath: sub.filePath,
+        thumbnailUrl,
         width: sub.width,
         height: sub.height,
         aspectRatio: sub.aspectRatio,
@@ -142,6 +171,13 @@ export async function POST(
     if (effectiveStatus !== "SUBMISSION" && !isAdmin) {
       return NextResponse.json(
         { error: "Die Einreichungsphase für diesen Wettbewerb ist momentan nicht aktiv." },
+        { status: 403 }
+      );
+    }
+
+    if (!contest.allowParticipantUploads && !isAdmin) {
+      return NextResponse.json(
+        { error: "Für diesen Wettbewerb sind Einreichungen durch Teilnehmer deaktiviert. Die Bilder wurden von der Administration bereitgestellt." },
         { status: 403 }
       );
     }
@@ -284,11 +320,21 @@ export async function POST(
 
     const ext = path.extname(file.name) || `.${imageMeta.format}`;
     const randomHex = crypto.randomBytes(8).toString("hex");
-    const storedFilename = `${Date.now()}-${randomHex}${ext}`;
+    const fileId = `${Date.now()}-${randomHex}`;
+    const storedFilename = `${fileId}${ext}`;
     const targetFilePath = path.join(uploadsDir, storedFilename);
 
     await fs.promises.writeFile(targetFilePath, buffer);
     const publicUrl = `/uploads/submissions/${storedFilename}`;
+
+    // Create fast preview thumbnail (WebP 1200px max)
+    const thumbFilename = `thumb-${fileId}.webp`;
+    const thumbFilePath = path.join(uploadsDir, thumbFilename);
+    try {
+      await createOptimizedPreview(buffer, thumbFilePath, 1200);
+    } catch (e) {
+      console.warn("Could not generate thumbnail:", e);
+    }
 
     const submission = await prisma.submission.create({
       data: {

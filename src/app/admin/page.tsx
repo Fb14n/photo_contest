@@ -18,7 +18,9 @@ import {
   Clock,
   CheckCircle,
   AlertTriangle,
+  Settings,
 } from "lucide-react";
+import ConfirmModal from "@/components/ConfirmModal";
 import { getStatusBadgeInfo, ContestEffectiveStatus } from "@/lib/contest-status";
 
 interface AdminContest {
@@ -48,6 +50,8 @@ export default function AdminDashboardPage() {
   const [currentUser, setCurrentUser] = useState<{ role: string; email: string } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [contestToDelete, setContestToDelete] = useState<{ id: string; title: string } | null>(null);
+  const [isDeletingContest, setIsDeletingContest] = useState(false);
 
   const loadContests = async () => {
     try {
@@ -76,18 +80,23 @@ export default function AdminDashboardPage() {
     loadContests();
   }, []);
 
-  const handleDeleteContest = async (id: string, title: string) => {
-    if (!confirm(`Möchtest du den Wettbewerb "${title}" und alle zugehörigen Bilder & Bewertungen wirklich unwiderruflich löschen?`)) {
-      return;
-    }
+  const handleDeleteContest = (id: string, title: string) => {
+    setContestToDelete({ id, title });
+  };
+
+  const handleConfirmDeleteContest = async () => {
+    if (!contestToDelete) return;
+    const { id, title } = contestToDelete;
 
     try {
+      setIsDeletingContest(true);
       setDeletingId(id);
       const res = await fetch(`/api/contests/${id}`, { method: "DELETE" });
       const data = await res.json();
       if (data.success) {
-        setActionSuccess(`Wettbewerb "${title}" wurde gelöscht.`);
+        setActionSuccess(`Wettbewerb "${title}" wurde erfolgreich gelöscht.`);
         setTimeout(() => setActionSuccess(null), 3000);
+        setContestToDelete(null);
         await loadContests();
       } else {
         alert(data.error || "Löschen fehlgeschlagen");
@@ -95,6 +104,7 @@ export default function AdminDashboardPage() {
     } catch {
       alert("Fehler beim Löschen des Wettbewerbs");
     } finally {
+      setIsDeletingContest(false);
       setDeletingId(null);
     }
   };
@@ -155,6 +165,13 @@ export default function AdminDashboardPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          <Link
+            href="/admin/settings"
+            className="inline-flex items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-2.5 text-sm font-semibold text-neutral-200 hover:text-white hover:bg-neutral-800 transition shadow-sm"
+          >
+            <Settings className="h-4 w-4 text-purple-400" />
+            Einstellungen & Schutz
+          </Link>
           <Link
             href="/admin/users"
             className="inline-flex items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-2.5 text-sm font-semibold text-neutral-200 hover:text-white hover:bg-neutral-800 transition shadow-sm"
@@ -344,6 +361,20 @@ export default function AdminDashboardPage() {
           </div>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={!!contestToDelete}
+        title="Wettbewerb unwiderruflich löschen?"
+        message={`Möchtest du den Wettbewerb „${contestToDelete?.title}“ und alle zugehörigen Themen, eingereichten Fotos, Bewertungen und Einladungen wirklich unwiderruflich löschen?`}
+        confirmText="Wettbewerb endgültig löschen"
+        cancelText="Abbrechen"
+        variant="danger"
+        isLoading={isDeletingContest}
+        onConfirm={handleConfirmDeleteContest}
+        onClose={() => {
+          if (!isDeletingContest) setContestToDelete(null);
+        }}
+      />
     </div>
   );
 }

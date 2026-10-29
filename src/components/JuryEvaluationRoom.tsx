@@ -26,6 +26,7 @@ export interface JurySubmission {
   title: string;
   description?: string | null;
   filePath: string;
+  thumbnailUrl?: string;
   width: number;
   height: number;
   aspectRatio?: string | null;
@@ -37,6 +38,7 @@ export interface JurySubmission {
   shutterSpeed?: string | null;
   takenAt?: string | null;
   photographerName: string;
+  isOwn?: boolean;
   myRating?: {
     id: string;
     score: number;
@@ -62,8 +64,11 @@ export default function JuryEvaluationRoom({
   const [filter, setFilter] = useState<"all" | "unrated" | "rated">("all");
   const [currentIndex, setCurrentIndex] = useState(0);
 
+  // Eligible submissions: exclude juror's own submissions from evaluation
+  const eligibleSubmissions = submissions.filter((s) => !s.isOwn);
+
   // Filtered submissions
-  const filteredSubmissions = submissions.filter((s) => {
+  const filteredSubmissions = eligibleSubmissions.filter((s) => {
     if (filter === "unrated") return !s.myRating;
     if (filter === "rated") return !!s.myRating;
     return true;
@@ -71,9 +76,9 @@ export default function JuryEvaluationRoom({
 
   const currentSub = filteredSubmissions[currentIndex] || null;
 
-  // Active score & comment for the currently viewed image
-  const [activeScore, setActiveScore] = useState<number>(
-    currentSub?.myRating?.score !== undefined ? currentSub.myRating.score : 7
+  // Active score & comment for the currently viewed image (null if not yet rated)
+  const [activeScore, setActiveScore] = useState<number | null>(
+    currentSub?.myRating?.score !== undefined ? currentSub.myRating.score : null
   );
   const [activeComment, setActiveComment] = useState<string>(
     currentSub?.myRating?.comment || ""
@@ -123,7 +128,7 @@ export default function JuryEvaluationRoom({
   // Sync state whenever currentSub changes
   useEffect(() => {
     if (currentSub) {
-      setActiveScore(currentSub.myRating?.score !== undefined ? currentSub.myRating.score : 7);
+      setActiveScore(currentSub.myRating?.score !== undefined ? currentSub.myRating.score : null);
       setActiveComment(currentSub.myRating?.comment || "");
       setSaveSuccess(false);
       setErrorMessage(null);
@@ -134,8 +139,8 @@ export default function JuryEvaluationRoom({
 
   // Handle save rating
   const handleSaveScore = useCallback(
-    async (scoreToSave: number, commentToSave: string) => {
-      if (!currentSub) return;
+    async (scoreToSave: number | null, commentToSave: string) => {
+      if (!currentSub || scoreToSave === null) return;
       try {
         setIsSaving(true);
         setErrorMessage(null);
@@ -209,17 +214,17 @@ export default function JuryEvaluationRoom({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handlePrev, handleNext, handleSaveScore, activeComment, lightboxOpen]);
 
-  const ratedCount = submissions.filter((s) => s.myRating).length;
-  const totalCount = submissions.length;
+  const ratedCount = eligibleSubmissions.filter((s) => s.myRating).length;
+  const totalCount = eligibleSubmissions.length;
   const progressPercent = totalCount > 0 ? Math.round((ratedCount / totalCount) * 100) : 0;
 
-  if (submissions.length === 0) {
+  if (eligibleSubmissions.length === 0) {
     return (
       <div className="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-12 text-center">
         <Camera className="mx-auto h-12 w-12 text-neutral-600 mb-3" />
-        <h3 className="text-lg font-bold text-white">Noch keine Einreichungen vorhanden</h3>
-        <p className="text-sm text-neutral-400 mt-1">
-          Für diesen Wettbewerb wurden bisher noch keine Bilder hochgeladen.
+        <h3 className="text-lg font-bold text-white">Keine fremden Bilder zur Bewertung</h3>
+        <p className="text-sm text-neutral-400 mt-1 max-w-md mx-auto">
+          Es gibt aktuell keine Bilder anderer Teilnehmer, die du bewerten kannst. Eigene Einreichungen sind von deiner Bewertung ausgeschlossen.
         </p>
       </div>
     );
@@ -379,7 +384,7 @@ export default function JuryEvaluationRoom({
                   }`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={sub.filePath} alt="" className="h-full w-full object-cover" />
+                  <img src={sub.thumbnailUrl || sub.filePath} alt="" className="h-full w-full object-cover" />
                   {sub.myRating && (
                     <div className="absolute bottom-1 right-1 rounded-full bg-emerald-500 p-0.5 text-white shadow">
                       <CheckCircle2 className="h-3 w-3" />
@@ -466,8 +471,16 @@ export default function JuryEvaluationRoom({
                   Bewertung (0 bis 10)
                 </span>
                 <span className="text-3xl font-black text-white flex items-center gap-1">
-                  {activeScore.toFixed(1)}
-                  <span className="text-xs font-normal text-purple-300">/ 10</span>
+                  {activeScore !== null ? (
+                    <>
+                      {activeScore.toFixed(1)}
+                      <span className="text-xs font-normal text-purple-300">/ 10</span>
+                    </>
+                  ) : (
+                    <span className="text-sm font-medium text-neutral-400 italic">
+                      Noch unbewertet
+                    </span>
+                  )}
                 </span>
               </div>
 
@@ -482,7 +495,7 @@ export default function JuryEvaluationRoom({
                       handleSaveScore(num, activeComment);
                     }}
                     className={`rounded-xl py-2 text-xs font-bold transition ${
-                      Math.round(activeScore) === num
+                      activeScore !== null && Math.round(activeScore) === num
                         ? "bg-purple-600 text-white shadow-lg shadow-purple-600/30 scale-105"
                         : "bg-neutral-900 border border-neutral-800 text-neutral-300 hover:border-purple-500/50 hover:bg-neutral-800"
                     }`}
@@ -496,16 +509,28 @@ export default function JuryEvaluationRoom({
               <div className="mb-4">
                 <div className="flex justify-between text-[11px] text-neutral-400 mb-1">
                   <span>Feinabstimmung (Slider)</span>
-                  <span>{activeScore}</span>
+                  <span>{activeScore !== null ? `${activeScore.toFixed(1)} / 10` : "Nicht gesetzt"}</span>
                 </div>
                 <input
                   type="range"
                   min="0"
                   max="10"
                   step="0.5"
-                  value={activeScore}
+                  value={activeScore !== null ? activeScore : 5}
                   onChange={(e) => setActiveScore(parseFloat(e.target.value))}
-                  className="w-full accent-purple-500 cursor-pointer"
+                  onMouseUp={() => {
+                    if (activeScore !== null) {
+                      handleSaveScore(activeScore, activeComment);
+                    }
+                  }}
+                  onTouchEnd={() => {
+                    if (activeScore !== null) {
+                      handleSaveScore(activeScore, activeComment);
+                    }
+                  }}
+                  className={`w-full accent-purple-500 cursor-pointer ${
+                    activeScore === null ? "opacity-50" : ""
+                  }`}
                 />
               </div>
 
@@ -542,12 +567,20 @@ export default function JuryEvaluationRoom({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => handleSaveScore(activeScore, activeComment)}
-                  disabled={isSaving}
-                  className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-purple-600 py-2.5 text-xs font-bold text-white shadow-lg shadow-purple-600/30 hover:bg-purple-500 disabled:opacity-50 transition"
+                  onClick={() => {
+                    if (activeScore !== null) {
+                      handleSaveScore(activeScore, activeComment);
+                    }
+                  }}
+                  disabled={isSaving || activeScore === null}
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-purple-600 py-2.5 text-xs font-bold text-white shadow-lg shadow-purple-600/30 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed transition"
                 >
                   <Star className="h-3.5 w-3.5 fill-white" />
-                  {currentSub.myRating ? "Bewertung ändern" : "Note speichern"}
+                  {activeScore === null
+                    ? "Bitte Note wählen (0–10)"
+                    : currentSub.myRating
+                    ? "Bewertung aktualisieren"
+                    : "Note speichern"}
                 </button>
 
                 {currentIndex < filteredSubmissions.length - 1 && (

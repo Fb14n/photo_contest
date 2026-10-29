@@ -197,7 +197,66 @@ Das Wettbewerbs-Team`;
   });
 }
 
+export async function sendExistingUserContestInvitationEmail({
+  email,
+  name,
+  contestTitle,
+  contestSlug,
+  role,
+}: {
+  email: string;
+  name?: string | null;
+  contestTitle: string;
+  contestSlug: string;
+  role: "Teilnehmer" | "Juror";
+}) {
+  const greeting = name ? `Hallo ${name}` : "Hallo";
+  const roleText = role === "Juror" ? "als Juror(in)" : "als Teilnehmer(in)";
+  const subject = `Einladung zum Fotowettbewerb: ${contestTitle}`;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const contestUrl = `${appUrl}/contests/${contestSlug}`;
 
+  const text = `${greeting},
+
+du wurdest ${roleText} zum Fotowettbewerb "${contestTitle}" eingeladen!
+
+Da du bereits ein registriertes Konto bei PhotoContest besitzt, ist keine Neuanmeldung oder Passwortvergabe nötig. Melde dich einfach wie gewohnt mit deinen Zugangsdaten an:
+${contestUrl}
+
+Wir freuen uns auf deine Teilnahme!
+
+Viele Grüße,
+Dein PhotoContest-Team`;
+
+  const html = `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1e293b;">
+      <h2 style="color: #0284c7;">Einladung zum Fotowettbewerb</h2>
+      <p>${greeting},</p>
+      <p>du wurdest <strong>${roleText}</strong> zum Fotowettbewerb <strong>&bdquo;${contestTitle}&ldquo;</strong> eingeladen!</p>
+      <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin: 18px 0; font-size: 13px; color: #475569;">
+        ℹ️ <strong>Bestehendes Konto:</strong> Da du bereits ein Nutzerkonto besitzt, ist kein neues Passwort erforderlich. Melde dich einfach mit deinen bekannten Zugangsdaten an.
+      </div>
+      <div style="margin: 28px 0;">
+        <a href="${contestUrl}" style="background-color: #0284c7; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+          Direkt zum Wettbewerb
+        </a>
+      </div>
+      <p style="font-size: 13px; color: #64748b;">
+        Direktlink:<br />
+        <a href="${contestUrl}" style="color: #0284c7;">${contestUrl}</a>
+      </p>
+    </div>
+  `;
+
+  return sendEmail({
+    to: email,
+    subject,
+    text,
+    html,
+    senderType: "contest",
+    replyTo: process.env.CONTEST_CONTACT_EMAIL || "fotowettbewerb@bergerdd.de",
+  });
+}
 
 export async function sendAccountRequestNotificationToAdmin({
   name,
@@ -299,3 +358,5 @@ Dein PhotoContest-Team`;
     replyTo: process.env.CONTEST_CONTACT_EMAIL || "fotowettbewerb@bergerdd.de",
   });
 }
+
+

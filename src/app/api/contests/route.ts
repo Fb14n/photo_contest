@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthSession, requireAdmin } from "@/lib/auth";
 import { getEffectiveStatus } from "@/lib/contest-status";
+import { sendContestInvitationEmail, sendExistingUserContestInvitationEmail } from "@/lib/email";
 
 export async function GET() {
   try {
@@ -119,6 +120,9 @@ export async function POST(req: Request) {
       ratingEnd,
       votingMode = "EXCLUSIVE_JURY",
       anonymousJudging = true,
+      publicResults = true,
+      allowParticipantUploads = true,
+      sendNotificationEmails = true,
       maxFileSizeMb = 15.0,
       allowedFormats = "image/jpeg,image/png,image/webp",
       minWidth = 1200,
@@ -168,6 +172,8 @@ export async function POST(req: Request) {
         ratingEnd: new Date(ratingEnd),
         votingMode,
         anonymousJudging: !!anonymousJudging,
+        publicResults: !!publicResults,
+        allowParticipantUploads: !!allowParticipantUploads,
         maxFileSizeMb: parseFloat(maxFileSizeMb) || 15.0,
         allowedFormats,
         minWidth: minWidth ? parseInt(minWidth, 10) : null,
@@ -188,21 +194,48 @@ export async function POST(req: Request) {
       include: { topics: true },
     });
 
+    const host = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
     // Add pre-configured participants if any
     if (Array.isArray(participantEmails) && participantEmails.length > 0) {
       for (const email of participantEmails) {
         const clean = email.trim().toLowerCase();
         if (clean && clean.includes("@")) {
           const existingUser = await prisma.user.findUnique({ where: { email: clean } });
-          await prisma.contestParticipant.create({
+          const participant = await prisma.contestParticipant.create({
             data: {
               contestId: contest.id,
               userId: existingUser?.id || null,
               email: clean,
               name: existingUser?.name || null,
               status: existingUser ? "REGISTERED" : "INVITED",
+              inviteSentAt: sendNotificationEmails ? new Date() : null,
             },
           });
+
+          if (sendNotificationEmails) {
+            try {
+              if (existingUser) {
+                await sendExistingUserContestInvitationEmail({
+                  email: clean,
+                  name: existingUser.name,
+                  contestTitle: contest.title,
+                  contestSlug: contest.slug,
+                  role: "Teilnehmer",
+                });
+              } else {
+                await sendContestInvitationEmail({
+                  email: clean,
+                  name: null,
+                  contestTitle: contest.title,
+                  role: "Teilnehmer",
+                  inviteUrl: `${host}/invite/${participant.inviteToken}`,
+                });
+              }
+            } catch (mailErr) {
+              console.error("Error sending participant invitation email:", mailErr);
+            }
+          }
         }
       }
     }
@@ -213,15 +246,40 @@ export async function POST(req: Request) {
         const clean = email.trim().toLowerCase();
         if (clean && clean.includes("@")) {
           const existingUser = await prisma.user.findUnique({ where: { email: clean } });
-          await prisma.contestJuror.create({
+          const juror = await prisma.contestJuror.create({
             data: {
               contestId: contest.id,
               userId: existingUser?.id || null,
               email: clean,
               name: existingUser?.name || null,
               status: existingUser ? "ACTIVE" : "INVITED",
+              inviteSentAt: sendNotificationEmails ? new Date() : null,
             },
           });
+
+          if (sendNotificationEmails) {
+            try {
+              if (existingUser) {
+                await sendExistingUserContestInvitationEmail({
+                  email: clean,
+                  name: existingUser.name,
+                  contestTitle: contest.title,
+                  contestSlug: contest.slug,
+                  role: "Juror",
+                });
+              } else {
+                await sendContestInvitationEmail({
+                  email: clean,
+                  name: null,
+                  contestTitle: contest.title,
+                  role: "Juror",
+                  inviteUrl: `${host}/invite/${juror.inviteToken}`,
+                });
+              }
+            } catch (mailErr) {
+              console.error("Error sending juror invitation email:", mailErr);
+            }
+          }
         }
       }
     }

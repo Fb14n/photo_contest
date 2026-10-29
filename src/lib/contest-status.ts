@@ -15,10 +15,14 @@ export interface ContestDates {
 }
 
 export function getEffectiveStatus(contest: ContestDates): ContestEffectiveStatus {
+  // Manual status overrides by Admin
   if (contest.status === "DRAFT") return "DRAFT";
   if (contest.status === "ARCHIVED") return "ARCHIVED";
   if (contest.status === "FINISHED") return "FINISHED";
+  if (contest.status === "SUBMISSION") return "SUBMISSION";
+  if (contest.status === "RATING") return "RATING";
 
+  // If status is "AUTO" or empty, calculate automatically based on timestamps
   const now = new Date().getTime();
   const subStart = new Date(contest.submissionStart).getTime();
   const subEnd = new Date(contest.submissionEnd).getTime();

@@ -18,6 +18,7 @@ import {
   Download,
 } from "lucide-react";
 import InviteModal from "@/components/InviteModal";
+import UserPicker from "@/components/UserPicker";
 
 interface PersonEntry {
   id: string;
@@ -44,6 +45,7 @@ export default function AdminContestInvitesPage({
 
   // New Invite Form
   const [newEmails, setNewEmails] = useState("");
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [targetType, setTargetType] = useState<"participant" | "juror">("participant");
   const [sendEmailsDirectly, setSendEmailsDirectly] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -86,15 +88,17 @@ export default function AdminContestInvitesPage({
 
   const handleCreateInvites = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newEmails.trim() || !contest) return;
+    if (!contest) return;
 
-    const emailList = newEmails
+    const manualList = newEmails
       .split(/[\n,;]+/)
       .map((em) => em.trim().toLowerCase())
       .filter((em) => em && em.includes("@"));
 
-    if (emailList.length === 0) {
-      alert("Bitte mindestens eine gültige E-Mail-Adresse angeben.");
+    const combinedList = Array.from(new Set([...selectedUsers, ...manualList]));
+
+    if (combinedList.length === 0) {
+      alert("Bitte mindestens einen registrierten Nutzer auswählen oder eine gültige E-Mail-Adresse angeben.");
       return;
     }
 
@@ -105,18 +109,19 @@ export default function AdminContestInvitesPage({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: targetType,
-          emails: emailList,
+          emails: combinedList,
           sendEmail: sendEmailsDirectly,
         }),
       });
 
       const data = await res.json();
-      if (data.success) {
+      if (data.success || Array.isArray(data)) {
         setNewEmails("");
+        setSelectedUsers([]);
         setEmailStatusToast(
           sendEmailsDirectly
-            ? `${emailList.length} Einladung(en) erstellt und per E-Mail versendet!`
-            : `${emailList.length} Einladung(en) erstellt!`
+            ? `${combinedList.length} Einladung(en) erstellt und per E-Mail versendet!`
+            : `${combinedList.length} Einladung(en) erstellt!`
         );
         setTimeout(() => setEmailStatusToast(null), 4000);
         await loadData();
@@ -333,10 +338,23 @@ export default function AdminContestInvitesPage({
             </div>
           </div>
 
-          <div>
+          <div className="pt-2">
+            <UserPicker
+              label="Registrierte Benutzer auswählen"
+              description="Wähle bereits registrierte Nutzer der Plattform aus, um sie mit einem Klick hinzuzufügen."
+              selectedEmails={selectedUsers}
+              onChange={setSelectedUsers}
+              accentColor={targetType === "juror" ? "purple" : "sky"}
+              excludeEmails={(targetType === "participant" ? participants : jurors).map((p) => p.email)}
+            />
+          </div>
+
+          <div className="pt-2">
+            <label className="block text-xs font-semibold text-neutral-300 mb-1.5">
+              Weitere externe E-Mail-Adressen (optional für noch nicht registrierte Personen)
+            </label>
             <textarea
-              required
-              rows={3}
+              rows={2}
               value={newEmails}
               onChange={(e) => setNewEmails(e.target.value)}
               placeholder="fotograf@beispiel.de, juror@fotoclub.de (durch Kommas oder Zeilenumbrüche getrennt)"

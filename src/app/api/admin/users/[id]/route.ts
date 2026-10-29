@@ -75,6 +75,26 @@ export async function PATCH(
     if (name !== undefined) data.name = name.trim();
     if (email !== undefined) data.email = email.toLowerCase().trim();
     if (role !== undefined && ["ADMIN", "JUROR", "PARTICIPANT"].includes(role)) {
+      if (role !== "ADMIN") {
+        const targetUser = await prisma.user.findUnique({
+          where: { id },
+          select: { role: true },
+        });
+        if (targetUser?.role === "ADMIN") {
+          const adminCount = await prisma.user.count({
+            where: { role: "ADMIN" },
+          });
+          if (adminCount <= 1) {
+            return NextResponse.json(
+              {
+                error:
+                  "Es muss immer mindestens ein Administrator im System existieren. Dem letzten Administrator kann die Admin-Rolle nicht entzogen werden.",
+              },
+              { status: 400 }
+            );
+          }
+        }
+      }
       data.role = role;
     }
     if (password && password.trim().length > 0) {
@@ -125,6 +145,30 @@ export async function DELETE(
         { error: "Du kannst deinen eigenen Administrator-Account nicht löschen." },
         { status: 400 }
       );
+    }
+
+    const targetUser = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, role: true, name: true, email: true },
+    });
+
+    if (!targetUser) {
+      return NextResponse.json({ error: "Benutzer nicht gefunden." }, { status: 404 });
+    }
+
+    if (targetUser.role === "ADMIN") {
+      const adminCount = await prisma.user.count({
+        where: { role: "ADMIN" },
+      });
+      if (adminCount <= 1) {
+        return NextResponse.json(
+          {
+            error:
+              "Es muss immer mindestens ein Administrator im System existieren. Der letzte verbleibende Administrator-Account kann nicht gelöscht werden.",
+          },
+          { status: 400 }
+        );
+      }
     }
 
     await prisma.user.delete({

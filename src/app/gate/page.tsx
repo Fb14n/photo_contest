@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Lock, Shield, ArrowRight, AlertCircle, Camera } from "lucide-react";
 
@@ -9,6 +9,17 @@ export default function GatePage() {
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/gate")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.enabled === false) {
+          router.push("/login");
+        }
+      })
+      .catch(() => {});
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

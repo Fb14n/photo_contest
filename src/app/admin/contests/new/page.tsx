@@ -17,7 +17,10 @@ import {
   AlertCircle,
   Sparkles,
   Lock,
+  Camera,
+  Mail,
 } from "lucide-react";
+import UserPicker from "@/components/UserPicker";
 
 interface TopicInput {
   title: string;
@@ -51,15 +54,22 @@ export default function NewContestPage() {
     setRatingEnd(defaultRateEnd);
   }, []);
 
+  // Contest Flow & Upload Mode
+  const [contestFlowMode, setContestFlowMode] = useState<"STANDARD" | "DIRECT_RATING">("STANDARD");
+
   // Access & Participants
   const [accessType, setAccessType] = useState<"OPEN" | "INVITE_ONLY">("OPEN");
   const [maxParticipants, setMaxParticipants] = useState<string>("");
   const [participantEmails, setParticipantEmails] = useState("");
+  const [selectedParticipantUsers, setSelectedParticipantUsers] = useState<string[]>([]);
 
   // Voting Mode & Jury
   const [votingMode, setVotingMode] = useState<"EXCLUSIVE_JURY" | "PEER_REVIEW">("EXCLUSIVE_JURY");
   const [anonymousJudging, setAnonymousJudging] = useState(true);
+  const [publicResults, setPublicResults] = useState(true);
   const [jurorEmails, setJurorEmails] = useState("");
+  const [selectedJurorUsers, setSelectedJurorUsers] = useState<string[]>([]);
+  const [sendNotificationEmails, setSendNotificationEmails] = useState(true);
 
   // Image Rules
   const [maxFileSizeMb, setMaxFileSizeMb] = useState(15.0);
@@ -118,6 +128,9 @@ export default function NewContestPage() {
       .map((e) => e.trim().toLowerCase())
       .filter((e) => e && e.includes("@"));
 
+    const allParticipantEmails = Array.from(new Set([...selectedParticipantUsers, ...parsedParticipants]));
+    const allJurorEmails = Array.from(new Set([...selectedJurorUsers, ...parsedJurors]));
+
     setIsSubmitting(true);
 
     try {
@@ -127,7 +140,8 @@ export default function NewContestPage() {
         body: JSON.stringify({
           title,
           description,
-          status: "SUBMISSION",
+          status: contestFlowMode === "DIRECT_RATING" ? "RATING" : "SUBMISSION",
+          allowParticipantUploads: contestFlowMode !== "DIRECT_RATING",
           accessType,
           maxParticipants: maxParticipants ? parseInt(maxParticipants, 10) : null,
           submissionStart,
@@ -136,6 +150,7 @@ export default function NewContestPage() {
           ratingEnd,
           votingMode,
           anonymousJudging,
+          publicResults,
           maxFileSizeMb,
           allowedFormats,
           minWidth: minWidth ? Number(minWidth) : null,
@@ -145,8 +160,9 @@ export default function NewContestPage() {
           aspectRatio,
           namingPattern,
           topics,
-          participantEmails: parsedParticipants,
-          jurorEmails: parsedJurors,
+          participantEmails: allParticipantEmails,
+          jurorEmails: allJurorEmails,
+          sendNotificationEmails,
         }),
       });
 
@@ -225,6 +241,68 @@ export default function NewContestPage() {
               className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3.5 py-2 text-sm text-white placeholder-neutral-500 focus:border-purple-500 focus:outline-none"
             />
           </div>
+
+          {/* Ablauf-Modus & Uploads */}
+          <div className="pt-2 border-t border-neutral-800/80">
+            <label className="block text-xs font-semibold text-neutral-300 mb-2">
+              Ablauf-Modus & Upload-Rechte *
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <label
+                className={`flex flex-col justify-between rounded-xl border p-4 cursor-pointer transition ${
+                  contestFlowMode === "STANDARD"
+                    ? "border-sky-500 bg-sky-500/10"
+                    : "border-neutral-800 bg-neutral-950/60 hover:border-neutral-700"
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-sm text-white flex items-center gap-1.5">
+                      <Camera className="h-4 w-4 text-sky-400" />
+                      Regulärer Wettbewerb
+                    </span>
+                    <input
+                      type="radio"
+                      name="contestFlowMode"
+                      checked={contestFlowMode === "STANDARD"}
+                      onChange={() => setContestFlowMode("STANDARD")}
+                      className="accent-sky-500"
+                    />
+                  </div>
+                  <p className="text-xs text-neutral-400 mt-2">
+                    Teilnehmer laden während der Einreichungsphase ihre eigenen Fotos hoch. Nach Ablauf der Frist beginnt die Jurierung.
+                  </p>
+                </div>
+              </label>
+
+              <label
+                className={`flex flex-col justify-between rounded-xl border p-4 cursor-pointer transition ${
+                  contestFlowMode === "DIRECT_RATING"
+                    ? "border-purple-500 bg-purple-500/10"
+                    : "border-neutral-800 bg-neutral-950/60 hover:border-neutral-700"
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-sm text-white flex items-center gap-1.5">
+                      <ShieldCheck className="h-4 w-4 text-purple-400" />
+                      Direkte Jurierung (Admin lädt Fotos hoch)
+                    </span>
+                    <input
+                      type="radio"
+                      name="contestFlowMode"
+                      checked={contestFlowMode === "DIRECT_RATING"}
+                      onChange={() => setContestFlowMode("DIRECT_RATING")}
+                      className="accent-purple-500"
+                    />
+                  </div>
+                  <p className="text-xs text-neutral-400 mt-2">
+                    Teilnehmer-Uploads sind gesperrt. Du als Admin lädst alle Fotos vorab hoch und Teilnehmer/Juroren werden direkt zum Bewerten eingeladen.
+                  </p>
+                </div>
+              </label>
+            </div>
+          </div>
         </div>
 
         {/* SECTION 2: Zugang & Teilnehmer */}
@@ -287,7 +365,7 @@ export default function NewContestPage() {
             </label>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+          <div className="pt-2">
             <div>
               <label className="block text-xs font-medium text-neutral-300 mb-1.5">
                 Teilnehmer-Begrenzung (optional)
@@ -298,28 +376,40 @@ export default function NewContestPage() {
                 value={maxParticipants}
                 onChange={(e) => setMaxParticipants(e.target.value)}
                 placeholder="z. B. 25 (leer lassen für unbegrenzt)"
-                className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3.5 py-2 text-sm text-white placeholder-neutral-500 focus:border-sky-500 focus:outline-none"
+                className="w-full sm:w-1/2 rounded-xl border border-neutral-800 bg-neutral-950 px-3.5 py-2 text-sm text-white placeholder-neutral-500 focus:border-sky-500 focus:outline-none"
               />
               <span className="text-[11px] text-neutral-400 mt-1 block">
-                Maximale Anzahl an Fotografen, die Bilder einreichen dürfen.
+                Maximale Gesamtanzahl an Personen, die am Wettbewerb teilnehmen dürfen.
               </span>
             </div>
+          </div>
 
-            <div>
-              <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-                Teilnehmer-E-Mails vorab hinterlegen (optional)
-              </label>
-              <textarea
-                rows={2}
-                value={participantEmails}
-                onChange={(e) => setParticipantEmails(e.target.value)}
-                placeholder="fotograf1@mail.de, fotograf2@mail.de (oder Zeile für Zeile)"
-                className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3.5 py-2 text-xs text-white placeholder-neutral-500 focus:border-sky-500 focus:outline-none font-mono"
-              />
-              <span className="text-[11px] text-neutral-400 mt-1 block">
-                Erzeugt automatische Einladungstokens & QR-Codes im Admin-Bereich.
-              </span>
-            </div>
+          {/* User Picker for existing registered users */}
+          <div className="pt-3 border-t border-neutral-800/80">
+            <UserPicker
+              label="Registrierte Benutzer als Teilnehmer auswählen"
+              description="Wähle direkt bestehende Benutzerkonten aus der Plattform aus. Diese Nutzer erhalten eine personalisierte Einladung ohne erneute Passwortvergabe."
+              selectedEmails={selectedParticipantUsers}
+              onChange={setSelectedParticipantUsers}
+              accentColor="sky"
+            />
+          </div>
+
+          {/* Additional manual email addresses */}
+          <div className="pt-2">
+            <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+              Weitere externe E-Mail-Adressen (optional für noch nicht registrierte Personen)
+            </label>
+            <textarea
+              rows={2}
+              value={participantEmails}
+              onChange={(e) => setParticipantEmails(e.target.value)}
+              placeholder="neueteilnehmerin@mail.de, gast@mail.de (oder Zeile für Zeile)"
+              className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3.5 py-2 text-xs text-white placeholder-neutral-500 focus:border-sky-500 focus:outline-none font-mono"
+            />
+            <span className="text-[11px] text-neutral-400 mt-1 block">
+              Erzeugt automatische Einladungslinks und Einladungs-E-Mails zur Passwortvergabe für neue Personen.
+            </span>
           </div>
         </div>
 
@@ -446,24 +536,34 @@ export default function NewContestPage() {
           </div>
 
           {votingMode === "EXCLUSIVE_JURY" && (
-            <div>
-              <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-                Jury-E-Mails festlegen (optional)
-              </label>
-              <textarea
-                rows={2}
-                value={jurorEmails}
-                onChange={(e) => setJurorEmails(e.target.value)}
-                placeholder="juror1@fotoclub.de, juror2@fotoclub.de"
-                className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3.5 py-2 text-xs text-white placeholder-neutral-500 focus:border-purple-500 focus:outline-none font-mono"
+            <div className="space-y-4 pt-2 border-t border-neutral-800/80">
+              <UserPicker
+                label="Registrierte Benutzer als Juroren auswählen"
+                description="Wähle bestehende Nutzer als Fach-Juroren aus. Diese erhalten eine Einladung zur Jurierung."
+                selectedEmails={selectedJurorUsers}
+                onChange={setSelectedJurorUsers}
+                accentColor="purple"
               />
-              <span className="text-[11px] text-neutral-400 mt-1 block">
-                Diese Personen erhalten direkten Jury-Status und können mit 0–10 Punkten bewerten.
-              </span>
+
+              <div>
+                <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                  Weitere externe Jury-E-Mails (optional)
+                </label>
+                <textarea
+                  rows={2}
+                  value={jurorEmails}
+                  onChange={(e) => setJurorEmails(e.target.value)}
+                  placeholder="gastjuror@fotoclub.de, experte@mail.de (oder Zeile für Zeile)"
+                  className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3.5 py-2 text-xs text-white placeholder-neutral-500 focus:border-purple-500 focus:outline-none font-mono"
+                />
+                <span className="text-[11px] text-neutral-400 mt-1 block">
+                  Diese Personen erhalten direkten Jury-Status und können mit 0–10 Punkten bewerten.
+                </span>
+              </div>
             </div>
           )}
 
-          <div className="pt-2">
+          <div className="pt-2 space-y-2">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -473,6 +573,18 @@ export default function NewContestPage() {
               />
               <span className="text-xs text-neutral-300 font-medium">
                 Anonyme Bewertung aktivieren (Namen der Fotografen werden für Juroren ausgeblendet)
+              </span>
+            </label>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={publicResults}
+                onChange={(e) => setPublicResults(e.target.checked)}
+                className="h-4 w-4 rounded border-neutral-800 bg-neutral-950 accent-purple-500"
+              />
+              <span className="text-xs text-neutral-300 font-medium">
+                Ergebnisse für Teilnehmer öffentlich freischalten (wenn deaktiviert, kann nur der Admin die Rangliste sehen)
               </span>
             </label>
           </div>
@@ -673,6 +785,26 @@ export default function NewContestPage() {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* Notification settings */}
+        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-4">
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={sendNotificationEmails}
+              onChange={(e) => setSendNotificationEmails(e.target.checked)}
+              className="h-4 w-4 rounded border-neutral-800 bg-neutral-950 accent-purple-500 mt-0.5"
+            />
+            <div className="text-xs">
+              <span className="font-semibold text-white block">
+                Einladungs-E-Mails jetzt direkt an alle ausgewählten Teilnehmer & Juroren versenden
+              </span>
+              <span className="text-neutral-400 block mt-0.5">
+                Bestehende Benutzer erhalten eine direkte Einladung zum Wettbewerb. Noch nicht registrierte Personen erhalten ihren Aktivierungslink.
+              </span>
+            </div>
+          </label>
         </div>
 
         {/* Submit Actions */}

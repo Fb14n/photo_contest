@@ -15,6 +15,7 @@ import {
   Layers,
   Plus,
   Trash2,
+  Award,
 } from "lucide-react";
 
 interface EditableTopic {
@@ -22,6 +23,19 @@ interface EditableTopic {
   title: string;
   description: string;
   maxSubmissionsPerUser: number;
+}
+
+function toLocalDatetimeString(dateInput: string | Date | null | undefined): string {
+  if (!dateInput) return "";
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const year = d.getFullYear();
+  const month = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  const hours = pad(d.getHours());
+  const minutes = pad(d.getMinutes());
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
 export default function EditContestPage({
@@ -48,6 +62,8 @@ export default function EditContestPage({
   const [ratingEnd, setRatingEnd] = useState("");
   const [votingMode, setVotingMode] = useState("EXCLUSIVE_JURY");
   const [anonymousJudging, setAnonymousJudging] = useState(true);
+  const [publicResults, setPublicResults] = useState(true);
+  const [allowParticipantUploads, setAllowParticipantUploads] = useState(true);
   const [maxFileSizeMb, setMaxFileSizeMb] = useState(15.0);
   const [allowedFormats, setAllowedFormats] = useState("image/jpeg,image/png,image/webp");
   const [minWidth, setMinWidth] = useState<number | "">("");
@@ -87,12 +103,14 @@ export default function EditContestPage({
           setStatus(c.status);
           setAccessType(c.accessType);
           setMaxParticipants(c.maxParticipants ? String(c.maxParticipants) : "");
-          setSubmissionStart(new Date(c.submissionStart).toISOString().slice(0, 16));
-          setSubmissionEnd(new Date(c.submissionEnd).toISOString().slice(0, 16));
-          setRatingStart(new Date(c.ratingStart).toISOString().slice(0, 16));
-          setRatingEnd(new Date(c.ratingEnd).toISOString().slice(0, 16));
+          setSubmissionStart(toLocalDatetimeString(c.submissionStart));
+          setSubmissionEnd(toLocalDatetimeString(c.submissionEnd));
+          setRatingStart(toLocalDatetimeString(c.ratingStart));
+          setRatingEnd(toLocalDatetimeString(c.ratingEnd));
           setVotingMode(c.votingMode);
           setAnonymousJudging(c.anonymousJudging);
+          setPublicResults(c.publicResults !== undefined ? Boolean(c.publicResults) : true);
+          setAllowParticipantUploads(c.allowParticipantUploads !== undefined ? Boolean(c.allowParticipantUploads) : true);
           setMaxFileSizeMb(c.maxFileSizeMb);
           setAllowedFormats(c.allowedFormats);
           setMinWidth(c.minWidth || "");
@@ -143,6 +161,8 @@ export default function EditContestPage({
           ratingEnd,
           votingMode,
           anonymousJudging,
+          publicResults,
+          allowParticipantUploads,
           maxFileSizeMb,
           allowedFormats,
           minWidth: minWidth ? Number(minWidth) : null,
@@ -239,15 +259,16 @@ export default function EditContestPage({
           <h2 className="text-base font-semibold text-white">Status & Veröffentlichung</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs font-medium text-neutral-300 mb-1.5">Manueller Status</label>
+              <label className="block text-xs font-medium text-neutral-300 mb-1.5">Wettbewerbs-Status</label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
                 className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3.5 py-2 text-xs text-white"
               >
-                <option value="SUBMISSION">SUBMISSION (Einreichungsphase)</option>
-                <option value="RATING">RATING (Jurierungsphase)</option>
-                <option value="FINISHED">FINISHED (Abgeschlossen)</option>
+                <option value="AUTO">Automatisch (nach Zeitplan / Fristen)</option>
+                <option value="SUBMISSION">SUBMISSION (Manuell: Einreichungsphase erzwingen)</option>
+                <option value="RATING">RATING (Manuell: Jurierungsphase erzwingen)</option>
+                <option value="FINISHED">FINISHED (Manuell: Abgeschlossen)</option>
                 <option value="DRAFT">DRAFT (Entwurf / Verborgen)</option>
                 <option value="ARCHIVED">ARCHIVED (Archiv)</option>
               </select>
@@ -503,6 +524,68 @@ export default function EditContestPage({
                 className="w-full rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-xs text-white"
               />
             </div>
+          </div>
+        </div>
+
+        {/* Results & Visibility */}
+        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-6 space-y-4">
+          <h2 className="text-base font-semibold text-white flex items-center gap-2">
+            <Award className="h-4 w-4 text-emerald-400" />
+            Upload-Rechte & Ergebnis-Freigabe
+          </h2>
+
+          <div className="flex items-start justify-between gap-4 border border-neutral-800/80 bg-neutral-950/60 p-4 rounded-xl">
+            <div>
+              <label className="text-xs font-semibold text-white block">
+                Teilnehmer-Uploads erlauben
+              </label>
+              <p className="text-xs text-neutral-400 mt-1 max-w-xl leading-relaxed">
+                Wenn aktiviert (Standard), können Teilnehmer innerhalb der Frist eigene Fotos hochladen. Wenn deaktiviert, ist das Hochladen für Teilnehmer gesperrt und nur Administratoren können Fotos bereitstellen (z.B. wenn alle Bilder vorab durch den Admin hochgeladen werden).
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={allowParticipantUploads}
+              onClick={() => setAllowParticipantUploads(!allowParticipantUploads)}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                allowParticipantUploads ? "bg-sky-600" : "bg-neutral-700"
+              }`}
+            >
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  allowParticipantUploads ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="flex items-start justify-between gap-4 border border-neutral-800/80 bg-neutral-950/60 p-4 rounded-xl">
+            <div>
+              <label className="text-xs font-semibold text-white block">
+                Ergebnisse für normale Teilnehmer nach Jurierungsende öffentlich anzeigen
+              </label>
+              <p className="text-xs text-neutral-400 mt-1 max-w-xl leading-relaxed">
+                Wenn aktiviert (Standard), können Teilnehmer nach Abschluss der Jurierung die Siegerfotos, Punkte und Ranglisten unter „Ergebnisse & Rangliste“ einsehen. Wenn deaktiviert, bleibt die Auswertung für Teilnehmer gesperrt und nur Administratoren können die Ergebnisse einsehen.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={publicResults}
+              onClick={() => setPublicResults(!publicResults)}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                publicResults ? "bg-emerald-600" : "bg-neutral-700"
+              }`}
+            >
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  publicResults ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
           </div>
         </div>
 

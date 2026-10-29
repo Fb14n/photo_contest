@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
+import { getSiteSettings } from "./lib/site-settings";
 
 const GATE_COOKIE_NAME = "fc_gate";
 const SECRET_KEY = new TextEncoder().encode(
@@ -8,10 +9,10 @@ const SECRET_KEY = new TextEncoder().encode(
 );
 
 export async function proxy(request: NextRequest) {
-  const sitePassword = process.env.SITE_PASSWORD;
+  const settings = getSiteSettings();
 
-  // If no site password is set, open access
-  if (!sitePassword || sitePassword.trim().length === 0) {
+  // If gate is disabled or password is empty, grant open access to entire site
+  if (!settings.gateEnabled || !settings.gatePassword || settings.gatePassword.trim().length === 0) {
     return NextResponse.next();
   }
 

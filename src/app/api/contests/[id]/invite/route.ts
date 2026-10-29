@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { generateQrCodeDataUrl } from "@/lib/qrcode";
-import { sendContestInvitationEmail } from "@/lib/email";
+import { sendContestInvitationEmail, sendExistingUserContestInvitationEmail } from "@/lib/email";
 
 export async function POST(
   req: Request,
@@ -63,13 +63,25 @@ export async function POST(
       }
 
       const inviteUrl = `${host}/invite/${token}`;
-      await sendContestInvitationEmail({
-        email: cleanEmail,
-        name: personName,
-        contestTitle: contest.title,
-        role: type === "juror" ? "Juror" : "Teilnehmer",
-        inviteUrl,
-      });
+      const existingUser = await prisma.user.findUnique({ where: { email: cleanEmail } });
+
+      if (existingUser) {
+        await sendExistingUserContestInvitationEmail({
+          email: cleanEmail,
+          name: personName || existingUser.name,
+          contestTitle: contest.title,
+          contestSlug: contest.slug,
+          role: type === "juror" ? "Juror" : "Teilnehmer",
+        });
+      } else {
+        await sendContestInvitationEmail({
+          email: cleanEmail,
+          name: personName,
+          contestTitle: contest.title,
+          role: type === "juror" ? "Juror" : "Teilnehmer",
+          inviteUrl,
+        });
+      }
 
       return NextResponse.json({
         success: true,
@@ -121,13 +133,23 @@ export async function POST(
         const qrCode = await generateQrCodeDataUrl(inviteUrl);
 
         if (sendEmail) {
-          await sendContestInvitationEmail({
-            email,
-            name: entry.name,
-            contestTitle: contest.title,
-            role: "Teilnehmer",
-            inviteUrl,
-          });
+          if (existingUser) {
+            await sendExistingUserContestInvitationEmail({
+              email,
+              name: existingUser.name || entry.name,
+              contestTitle: contest.title,
+              contestSlug: contest.slug,
+              role: "Teilnehmer",
+            });
+          } else {
+            await sendContestInvitationEmail({
+              email,
+              name: entry.name,
+              contestTitle: contest.title,
+              role: "Teilnehmer",
+              inviteUrl,
+            });
+          }
         }
 
         results.push({
@@ -167,13 +189,23 @@ export async function POST(
         const qrCode = await generateQrCodeDataUrl(inviteUrl);
 
         if (sendEmail) {
-          await sendContestInvitationEmail({
-            email,
-            name: entry.name,
-            contestTitle: contest.title,
-            role: "Juror",
-            inviteUrl,
-          });
+          if (existingUser) {
+            await sendExistingUserContestInvitationEmail({
+              email,
+              name: existingUser.name || entry.name,
+              contestTitle: contest.title,
+              contestSlug: contest.slug,
+              role: "Juror",
+            });
+          } else {
+            await sendContestInvitationEmail({
+              email,
+              name: entry.name,
+              contestTitle: contest.title,
+              role: "Juror",
+              inviteUrl,
+            });
+          }
         }
 
         results.push({

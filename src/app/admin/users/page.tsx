@@ -21,6 +21,7 @@ import {
   Copy,
   ExternalLink,
 } from "lucide-react";
+import ConfirmModal from "@/components/ConfirmModal";
 
 interface UserItem {
   id: string;
@@ -92,6 +93,13 @@ export default function AdminUsersPage() {
   const [approvePassword, setApprovePassword] = useState("");
   const [isApproving, setIsApproving] = useState(false);
   const [generatedSetupUrl, setGeneratedSetupUrl] = useState<string | null>(null);
+
+  // Confirm Modals State
+  const [userToDelete, setUserToDelete] = useState<UserItem | null>(null);
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
+  const [requestAction, setRequestAction] = useState<{ id: string; name: string; isDelete: boolean } | null>(null);
+  const [isProcessingRequest, setIsProcessingRequest] = useState(false);
+  const [userForResetLink, setUserForResetLink] = useState<UserItem | null>(null);
 
   const showSuccess = (msg: string) => {
     setSuccessMessage(msg);
@@ -181,14 +189,13 @@ export default function AdminUsersPage() {
   };
 
   // Handle Send Password Reset / Activation Link
-  const handleSendResetLink = async (user: UserItem) => {
-    if (
-      !confirm(
-        `Möchtest du eine E-Mail zum Festlegen/Zurücksetzen des Passworts an "${user.name}" (${user.email}) senden?`
-      )
-    ) {
-      return;
-    }
+  const handleSendResetLink = (user: UserItem) => {
+    setUserForResetLink(user);
+  };
+
+  const handleConfirmSendResetLink = async () => {
+    if (!userForResetLink) return;
+    const user = userForResetLink;
     setIsSendingResetId(user.id);
     try {
       const res = await fetch(`/api/admin/users/${user.id}`, { method: "POST" });
@@ -197,6 +204,7 @@ export default function AdminUsersPage() {
         showError(data.error || "Fehler beim Versenden des Links");
       } else {
         showSuccess(`Passwort-Link an ${user.email} versendet!`);
+        setUserForResetLink(null);
         if (data.resetUrl) {
           setActiveLinkInfo({
             title: "Passwort-Link generiert & versendet",
@@ -216,10 +224,18 @@ export default function AdminUsersPage() {
     }
   };
 
+  const adminCount = users.filter((u) => u.role === "ADMIN").length;
+
   // Handle Edit User
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
+
+    if (editingUser.role === "ADMIN" && editRole !== "ADMIN" && adminCount <= 1) {
+      showError("Dem einzigen Administrator kann die Admin-Rolle nicht entzogen werden. Es muss immer mindestens ein Admin existieren.");
+      return;
+    }
+
     setIsSavingEdit(true);
 
     try {
@@ -250,22 +266,32 @@ export default function AdminUsersPage() {
   };
 
   // Handle Delete User
-  const handleDeleteUser = async (user: UserItem) => {
-    if (!confirm(`Möchtest du das Konto von "${user.name}" (${user.email}) wirklich unwiderruflich löschen?`)) {
+  const handleDeleteUser = (user: UserItem) => {
+    if (user.role === "ADMIN" && adminCount <= 1) {
+      showError("Der letzte verbleibende Administrator-Account kann nicht gelöscht werden. Es muss immer mindestens ein Admin im System existieren.");
       return;
     }
+    setUserToDelete(user);
+  };
+
+  const handleConfirmDeleteUser = async () => {
+    if (!userToDelete) return;
+    setIsDeletingUser(true);
 
     try {
-      const res = await fetch(`/api/admin/users/${user.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/users/${userToDelete.id}`, { method: "DELETE" });
       const data = await res.json();
       if (!res.ok || data.error) {
         showError(data.error || "Fehler beim Löschen");
       } else {
-        showSuccess(`Benutzer "${user.name}" wurde gelöscht.`);
+        showSuccess(`Benutzer "${userToDelete.name}" wurde erfolgreich gelöscht.`);
+        setUserToDelete(null);
         await loadData();
       }
     } catch {
-      showError("Fehler beim Löschen");
+      showError("Netzwerkfehler beim Löschen des Benutzers");
+    } finally {
+      setIsDeletingUser(false);
     }
   };
 
@@ -303,35 +329,47 @@ export default function AdminUsersPage() {
   };
 
   // Handle Reject Request
-  const handleRejectRequest = async (req: AccountRequestItem) => {
-    if (!confirm(`Möchtest du die Anfrage von "${req.name}" wirklich ablehnen?`)) return;
-
-    try {
-      const res = await fetch(`/api/admin/account-requests/${req.id}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "REJECT" }),
-      });
-      if (res.ok) {
-        showSuccess(`Anfrage von ${req.name} wurde abgelehnt.`);
-        await loadData();
-      }
-    } catch {
-      showError("Fehler beim Ablehnen");
-    }
+  const handleRejectRequest = (req: AccountRequestItem) => {
+    setRequestAction({ id: req.id, name: req.name, isDelete: false });
   };
 
-  // Handle Delete Request
-  const handleDeleteRequest = async (id: string) => {
-    if (!confirm("Anfrage aus dem Verlauf löschen?")) return;
+  // Handle Delete Request from History
+  const handleDeleteRequest = (id: string, name: string) => {
+    setRequestAction({ id, name, isDelete: true });
+  };
+
+  const handleConfirmRequestAction = async () => {
+    if (!requestAction) return;
+    setIsProcessingRequest(true);
+
     try {
-      const res = await fetch(`/api/admin/account-requests/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        showSuccess("Anfrage gelöscht.");
-        await loadData();
+      if (requestAction.isDelete) {
+        const res = await fetch(`/api/admin/account-requests/${requestAction.id}`, { method: "DELETE" });
+        if (res.ok) {
+          showSuccess("Anfrage wurde aus dem Verlauf gelöscht.");
+          setRequestAction(null);
+          await loadData();
+        } else {
+          showError("Fehler beim Löschen der Anfrage");
+        }
+      } else {
+        const res = await fetch(`/api/admin/account-requests/${requestAction.id}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "REJECT" }),
+        });
+        if (res.ok) {
+          showSuccess(`Anfrage von "${requestAction.name}" wurde abgelehnt.`);
+          setRequestAction(null);
+          await loadData();
+        } else {
+          showError("Fehler beim Ablehnen der Anfrage");
+        }
       }
     } catch {
-      showError("Fehler beim Löschen");
+      showError("Netzwerkfehler bei der Ausführung");
+    } finally {
+      setIsProcessingRequest(false);
     }
   };
 
@@ -588,13 +626,23 @@ export default function AdminUsersPage() {
                             >
                               <Edit className="h-4 w-4" />
                             </button>
-                            <button
-                              onClick={() => handleDeleteUser(user)}
-                              className="rounded-lg p-1.5 text-neutral-400 hover:text-rose-400 hover:bg-rose-500/10 transition"
-                              title="Benutzer löschen"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                            {user.role === "ADMIN" && adminCount <= 1 ? (
+                              <button
+                                disabled
+                                className="rounded-lg p-1.5 text-neutral-600 cursor-not-allowed opacity-40"
+                                title="Letzter verbleibender Administrator-Account (geschützt)"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleDeleteUser(user)}
+                                className="rounded-lg p-1.5 text-neutral-400 hover:text-rose-400 hover:bg-rose-500/10 transition"
+                                title="Benutzer löschen"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -694,7 +742,7 @@ export default function AdminUsersPage() {
                               </>
                             ) : (
                               <button
-                                onClick={() => handleDeleteRequest(req.id)}
+                                onClick={() => handleDeleteRequest(req.id, req.name)}
                                 className="rounded-lg p-1.5 text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
                                 title="Anfrage aus Verlauf löschen"
                               >
@@ -850,15 +898,29 @@ export default function AdminUsersPage() {
 
               <div>
                 <label className="block text-xs font-medium text-neutral-300 mb-1">Rolle</label>
-                <select
-                  value={editRole}
-                  onChange={(e) => setEditRole(e.target.value)}
-                  className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3.5 py-2 text-xs text-white focus:border-sky-500 focus:outline-none"
-                >
-                  <option value="PARTICIPANT">📷 Teilnehmer</option>
-                  <option value="JUROR">⚖️ Juror</option>
-                  <option value="ADMIN">👑 Administrator</option>
-                </select>
+                {editingUser?.role === "ADMIN" && adminCount <= 1 ? (
+                  <div>
+                    <input
+                      type="text"
+                      disabled
+                      value="👑 Administrator (Letzter Admin - geschützt)"
+                      className="w-full rounded-xl border border-neutral-800 bg-neutral-950/60 px-3.5 py-2 text-xs text-neutral-400 cursor-not-allowed"
+                    />
+                    <p className="mt-1 text-[11px] text-amber-400">
+                      Es muss immer mindestens ein Administrator im System existieren.
+                    </p>
+                  </div>
+                ) : (
+                  <select
+                    value={editRole}
+                    onChange={(e) => setEditRole(e.target.value)}
+                    className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3.5 py-2 text-xs text-white focus:border-sky-500 focus:outline-none"
+                  >
+                    <option value="PARTICIPANT">📷 Teilnehmer</option>
+                    <option value="JUROR">⚖️ Juror</option>
+                    <option value="ADMIN">👑 Administrator</option>
+                  </select>
+                )}
               </div>
 
               <div>
@@ -1058,6 +1120,54 @@ export default function AdminUsersPage() {
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal for User Deletion */}
+      <ConfirmModal
+        isOpen={!!userToDelete}
+        title="Benutzerkonto unwiderruflich löschen?"
+        message={`Möchtest du das Benutzerkonto von „${userToDelete?.name}“ (${userToDelete?.email}) wirklich unwiderruflich löschen? Alle zugehörigen Einreichungen, Bewertungen und Daten gehen unwiderruflich verloren.`}
+        confirmText="Benutzer löschen"
+        cancelText="Abbrechen"
+        variant="danger"
+        isLoading={isDeletingUser}
+        onConfirm={handleConfirmDeleteUser}
+        onClose={() => {
+          if (!isDeletingUser) setUserToDelete(null);
+        }}
+      />
+
+      {/* Confirmation Modal for Account Request Action */}
+      <ConfirmModal
+        isOpen={!!requestAction}
+        title={requestAction?.isDelete ? "Anfrage aus Verlauf löschen?" : "Konto-Anfrage ablehnen?"}
+        message={
+          requestAction?.isDelete
+            ? `Möchtest du den Anfrage-Eintrag von „${requestAction?.name}“ wirklich dauerhaft aus dem Verlauf entfernen?`
+            : `Möchtest du die Registrierungs-Anfrage von „${requestAction?.name}“ wirklich ablehnen? Der Antragsteller erhält keinen Zugriff.`
+        }
+        confirmText={requestAction?.isDelete ? "Eintrag löschen" : "Anfrage ablehnen"}
+        cancelText="Abbrechen"
+        variant={requestAction?.isDelete ? "danger" : "warning"}
+        isLoading={isProcessingRequest}
+        onConfirm={handleConfirmRequestAction}
+        onClose={() => {
+          if (!isProcessingRequest) setRequestAction(null);
+        }}
+      />
+      {/* Confirmation Modal for Reset Link */}
+      <ConfirmModal
+        isOpen={!!userForResetLink}
+        title="Passwort-Link versenden?"
+        message={`Möchtest du einen Zugangs- / Passwort-Zurücksetzen-Link an die Adresse „${userForResetLink?.email}“ (${userForResetLink?.name}) senden?`}
+        confirmText="Link versenden"
+        cancelText="Abbrechen"
+        variant="warning"
+        isLoading={isSendingResetId !== null}
+        onConfirm={handleConfirmSendResetLink}
+        onClose={() => {
+          if (isSendingResetId === null) setUserForResetLink(null);
+        }}
+      />
     </div>
   );
 }

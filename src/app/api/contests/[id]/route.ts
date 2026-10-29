@@ -109,11 +109,40 @@ export async function GET(
       }
     }
 
+    // Calculate user submission counts per topic and total
+    let userSubmissionCountsByTopic: Record<string, number> = {};
+    let userTotalSubmissions = 0;
+
+    if (session) {
+      const userSubs = await prisma.submission.findMany({
+        where: {
+          contestId: contest.id,
+          userId: session.userId,
+        },
+        select: {
+          id: true,
+          topicId: true,
+        },
+      });
+
+      userTotalSubmissions = userSubs.length;
+      for (const sub of userSubs) {
+        userSubmissionCountsByTopic[sub.topicId] = (userSubmissionCountsByTopic[sub.topicId] || 0) + 1;
+      }
+    }
+
+    const topicsWithUserCounts = contest.topics.map((t) => ({
+      ...t,
+      userSubmissionCount: userSubmissionCountsByTopic[t.id] || 0,
+    }));
+
     const effectiveStatus = getEffectiveStatus(contest);
 
     return NextResponse.json({
       contest: {
         ...contest,
+        topics: topicsWithUserCounts,
+        userTotalSubmissions: session ? userTotalSubmissions : 0,
         effectiveStatus,
         isParticipant: !!userParticipation,
         isJuror: !!userJuror || (contest.votingMode === "PEER_REVIEW" && !!userParticipation),
@@ -134,26 +163,41 @@ export async function PUT(
     const { id } = await props.params;
     const data = await req.json();
 
+    const existingContest = await prisma.contest.findFirst({
+      where: { OR: [{ id }, { slug: id }] },
+    });
+
+    if (!existingContest) {
+      return NextResponse.json({ error: "Wettbewerb nicht gefunden." }, { status: 404 });
+    }
+
     const contest = await prisma.contest.update({
-      where: { id },
+      where: { id: existingContest.id },
       data: {
-        title: data.title !== undefined ? data.title : undefined,
-        description: data.description !== undefined ? data.description : undefined,
+        title: data.title !== undefined ? String(data.title).trim() : undefined,
+        description: data.description !== undefined ? String(data.description).trim() : undefined,
         status: data.status !== undefined ? data.status : undefined,
         accessType: data.accessType !== undefined ? data.accessType : undefined,
-        maxParticipants: data.maxParticipants !== undefined ? (data.maxParticipants ? parseInt(data.maxParticipants, 10) : null) : undefined,
+        maxParticipants:
+          data.maxParticipants !== undefined
+            ? data.maxParticipants && Number(data.maxParticipants) > 0
+              ? parseInt(String(data.maxParticipants), 10)
+              : null
+            : undefined,
         submissionStart: data.submissionStart ? new Date(data.submissionStart) : undefined,
         submissionEnd: data.submissionEnd ? new Date(data.submissionEnd) : undefined,
         ratingStart: data.ratingStart ? new Date(data.ratingStart) : undefined,
         ratingEnd: data.ratingEnd ? new Date(data.ratingEnd) : undefined,
         votingMode: data.votingMode !== undefined ? data.votingMode : undefined,
         anonymousJudging: data.anonymousJudging !== undefined ? !!data.anonymousJudging : undefined,
+        publicResults: data.publicResults !== undefined ? !!data.publicResults : undefined,
+        allowParticipantUploads: data.allowParticipantUploads !== undefined ? !!data.allowParticipantUploads : undefined,
         maxFileSizeMb: data.maxFileSizeMb !== undefined ? parseFloat(data.maxFileSizeMb) : undefined,
         allowedFormats: data.allowedFormats !== undefined ? data.allowedFormats : undefined,
-        minWidth: data.minWidth !== undefined ? (data.minWidth ? parseInt(data.minWidth, 10) : null) : undefined,
-        minHeight: data.minHeight !== undefined ? (data.minHeight ? parseInt(data.minHeight, 10) : null) : undefined,
-        maxWidth: data.maxWidth !== undefined ? (data.maxWidth ? parseInt(data.maxWidth, 10) : null) : undefined,
-        maxHeight: data.maxHeight !== undefined ? (data.maxHeight ? parseInt(data.maxHeight, 10) : null) : undefined,
+        minWidth: data.minWidth !== undefined ? (data.minWidth ? parseInt(String(data.minWidth), 10) : null) : undefined,
+        minHeight: data.minHeight !== undefined ? (data.minHeight ? parseInt(String(data.minHeight), 10) : null) : undefined,
+        maxWidth: data.maxWidth !== undefined ? (data.maxWidth ? parseInt(String(data.maxWidth), 10) : null) : undefined,
+        maxHeight: data.maxHeight !== undefined ? (data.maxHeight ? parseInt(String(data.maxHeight), 10) : null) : undefined,
         aspectRatio: data.aspectRatio !== undefined ? data.aspectRatio : undefined,
         namingPattern: data.namingPattern !== undefined ? data.namingPattern : undefined,
       },

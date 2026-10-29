@@ -144,6 +144,25 @@ export default function ClaimInvitePage({
             </div>
           )}
 
+          {inviteData.hasPassword && (
+            <div className="mb-6 rounded-xl border border-sky-500/30 bg-sky-500/10 p-3.5 text-xs text-sky-200">
+              <p className="font-semibold text-white mb-1">
+                ✓ Du hast bereits ein aktives Nutzerkonto!
+              </p>
+              <p className="text-sky-300 leading-relaxed">
+                Deine E-Mail ist bereits im System registriert. Du musst kein neues Passwort vergeben. Klicke einfach unten auf „Einladung annehmen“ oder melde dich direkt mit deinem bestehenden Konto an.
+              </p>
+              <div className="mt-2.5">
+                <Link
+                  href={`/login?redirect=/contests/${inviteData.contest.slug}`}
+                  className="font-semibold text-white underline hover:text-sky-300"
+                >
+                  Mit bestehendem Passwort anmelden &rarr;
+                </Link>
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleClaim} className="space-y-4">
             <div>
               <label className="block text-xs font-medium text-neutral-300 mb-1.5">

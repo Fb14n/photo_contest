@@ -16,12 +16,14 @@ import {
   Lock,
 } from "lucide-react";
 import ImageUploadZone, { UploadRules, TopicItem } from "@/components/ImageUploadZone";
+import ConfirmModal from "@/components/ConfirmModal";
 
 interface UserSubmission {
   id: string;
   title: string;
   description?: string | null;
   filePath: string;
+  thumbnailUrl?: string;
   topicId: string;
   topicTitle: string;
   width: number;
@@ -51,6 +53,8 @@ export default function SubmitPhotoPage({
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
+  const [submissionToDelete, setSubmissionToDelete] = useState<UserSubmission | null>(null);
+  const [isDeletingSub, setIsDeletingSub] = useState(false);
 
   const loadData = async () => {
     try {
@@ -74,8 +78,8 @@ export default function SubmitPhotoPage({
       }
       setContest(contestData.contest);
 
-      // 3. User submissions for this contest
-      const subRes = await fetch(`/api/contests/${contestData.contest.id}/submissions`);
+      // 3. User submissions for this contest (strictly current user's submissions)
+      const subRes = await fetch(`/api/contests/${contestData.contest.id}/submissions?mine=true`);
       const subData = await subRes.json();
       if (subData.submissions) {
         setMySubmissions(subData.submissions);
@@ -91,19 +95,24 @@ export default function SubmitPhotoPage({
     loadData();
   }, [resolvedParams.slug]);
 
-  const handleDelete = async (subId: string) => {
-    if (!contest) return;
-    if (!confirm("Möchtest du dieses Bild wirklich aus dem Wettbewerb löschen?")) return;
+  const handleDelete = (sub: UserSubmission) => {
+    setSubmissionToDelete(sub);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!contest || !submissionToDelete) return;
 
     try {
-      setDeletingId(subId);
-      const res = await fetch(`/api/contests/${contest.id}/submissions/${subId}`, {
+      setIsDeletingSub(true);
+      setDeletingId(submissionToDelete.id);
+      const res = await fetch(`/api/contests/${contest.id}/submissions/${submissionToDelete.id}`, {
         method: "DELETE",
       });
       const data = await res.json();
       if (data.success) {
-        setDeleteSuccess("Bild erfolgreich entfernt.");
+        setDeleteSuccess(`Bild „${submissionToDelete.title}“ erfolgreich entfernt.`);
         setTimeout(() => setDeleteSuccess(null), 3000);
+        setSubmissionToDelete(null);
         await loadData();
       } else {
         alert(data.error || "Fehler beim Löschen");
@@ -111,6 +120,7 @@ export default function SubmitPhotoPage({
     } catch {
       alert("Fehler beim Löschen des Bildes");
     } finally {
+      setIsDeletingSub(false);
       setDeletingId(null);
     }
   };
@@ -187,7 +197,8 @@ export default function SubmitPhotoPage({
     );
   }
 
-  const isSubmissionActive = contest.effectiveStatus === "SUBMISSION" || currentUser.role === "ADMIN";
+  // Allow uploads if submission is active OR user is Admin
+  const isSubmissionActive = (contest.effectiveStatus === "SUBMISSION" && contest.allowParticipantUploads !== false) || currentUser.role === "ADMIN";
 
   const rules: UploadRules = {
     maxFileSizeMb: contest.maxFileSizeMb,
@@ -244,6 +255,39 @@ export default function SubmitPhotoPage({
           </div>
         )}
 
+        {isSubmissionActive && mySubmissions.length > 0 && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-900/60 p-3 text-xs text-neutral-300">
+            <div className="flex items-center gap-2">
+              <Camera className="h-4 w-4 text-sky-400" />
+              <span>
+                Deine persönlichen Einreichungen: <strong>{mySubmissions.length}</strong> von{" "}
+                <strong>{topics.reduce((sum, t) => sum + t.maxSubmissionsPerUser, 0)}</strong> möglichen Fotos (Limit pro Person)
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {topics.map((t) => {
+                const count = mySubmissions.filter((s) => s.topicId === t.id).length;
+                const isFull = count >= t.maxSubmissionsPerUser;
+                return (
+                  <span
+                    key={t.id}
+                    className={`rounded px-2 py-0.5 text-[11px] font-medium border ${
+                      isFull
+                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                        : count > 0
+                        ? "border-sky-500/30 bg-sky-500/10 text-sky-400"
+                        : "border-neutral-800 bg-neutral-900 text-neutral-400"
+                    }`}
+                  >
+                    {t.title}: {count}/{t.maxSubmissionsPerUser}
+                    {isFull && " ✓"}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {deleteSuccess && (
           <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-300 flex items-center gap-2 animate-in fade-in">
             <CheckCircle className="h-4 w-4 shrink-0 text-emerald-400" />
@@ -259,6 +303,11 @@ export default function SubmitPhotoPage({
             contestId={contest.id}
             topics={topics}
             rules={rules}
+            isAdmin={currentUser.role === "ADMIN"}
+            submissionCounts={mySubmissions.reduce<Record<string, number>>((acc, s) => {
+              acc[s.topicId] = (acc[s.topicId] || 0) + 1;
+              return acc;
+            }, {})}
             onUploadSuccess={() => {
               loadData();
             }}
@@ -298,7 +347,7 @@ export default function SubmitPhotoPage({
                   <div className="relative aspect-[3/2] w-full overflow-hidden rounded-xl bg-neutral-950 mb-3 border border-neutral-800">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={sub.filePath}
+                      src={sub.thumbnailUrl || sub.filePath}
                       alt={sub.title}
                       className="h-full w-full object-cover group-hover:scale-102 transition duration-300"
                     />
@@ -339,7 +388,7 @@ export default function SubmitPhotoPage({
                 {isSubmissionActive && (
                   <div className="mt-4 border-t border-neutral-800/80 pt-3 flex justify-end">
                     <button
-                      onClick={() => handleDelete(sub.id)}
+                      onClick={() => handleDelete(sub)}
                       disabled={deletingId === sub.id}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-xs font-medium text-rose-300 hover:bg-rose-500/20 transition disabled:opacity-50"
                     >
@@ -353,6 +402,20 @@ export default function SubmitPhotoPage({
           </div>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={!!submissionToDelete}
+        title="Foto-Einreichung löschen?"
+        message={`Möchtest du das Foto „${submissionToDelete?.title}“ (${submissionToDelete?.topicTitle}) wirklich aus dem Wettbewerb löschen? Das Einreichungs-Kontingent für dieses Thema wird dadurch wieder freigegeben.`}
+        confirmText="Foto löschen"
+        cancelText="Abbrechen"
+        variant="danger"
+        isLoading={isDeletingSub}
+        onConfirm={handleConfirmDelete}
+        onClose={() => {
+          if (!isDeletingSub) setSubmissionToDelete(null);
+        }}
+      />
     </div>
   );
 }

@@ -51,8 +51,8 @@ export default function JudgeContestPage({
       }
       setContest(contestData.contest);
 
-      // 3. Submissions for jury evaluation
-      const subRes = await fetch(`/api/contests/${contestData.contest.id}/submissions`);
+      // 3. Submissions for jury evaluation (excluding juror's own submissions)
+      const subRes = await fetch(`/api/contests/${contestData.contest.id}/submissions?forJudging=true`);
       const subData = await subRes.json();
       if (subData.submissions) {
         setSubmissions(subData.submissions);

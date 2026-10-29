@@ -38,6 +38,8 @@ model Contest {
   ratingEnd          DateTime
   votingMode         String    @default("EXCLUSIVE_JURY") // "PEER_REVIEW", "EXCLUSIVE_JURY"
   anonymousJudging   Boolean   @default(true)
+  publicResults      Boolean   @default(true)
+  allowParticipantUploads Boolean @default(true)
 
   // Bildregeln / Vorgaben
   maxFileSizeMb      Float     @default(15.0)

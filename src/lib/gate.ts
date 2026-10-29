@@ -1,4 +1,5 @@
 import { SignJWT, jwtVerify } from "jose";
+import { getSiteSettings } from "./site-settings";
 
 const GATE_COOKIE_NAME = "fc_gate";
 const SECRET_KEY = new TextEncoder().encode(
@@ -6,12 +7,14 @@ const SECRET_KEY = new TextEncoder().encode(
 );
 
 export function isGateEnabled(): boolean {
-  const sitePassword = process.env.SITE_PASSWORD;
-  return Boolean(sitePassword && sitePassword.trim().length > 0);
+  const settings = getSiteSettings();
+  return settings.gateEnabled && Boolean(settings.gatePassword && settings.gatePassword.trim().length > 0);
 }
 
 export function verifySitePassword(password: string): boolean {
-  const sitePassword = process.env.SITE_PASSWORD;
+  const settings = getSiteSettings();
+  if (!settings.gateEnabled) return true;
+  const sitePassword = settings.gatePassword || process.env.SITE_PASSWORD || "";
   if (!sitePassword) return true;
   return password.trim() === sitePassword.trim();
 }
