@@ -8,17 +8,68 @@ export async function GET() {
     const session = await getAuthSession();
     const isAdmin = session?.role === "ADMIN";
 
-    const contests = await prisma.contest.findMany({
-      where: isAdmin
-        ? {}
-        : {
-            status: { not: "DRAFT" },
+    let whereClause: any = {
+      status: { not: "DRAFT" },
+      accessType: "OPEN",
+    };
+
+    if (isAdmin) {
+      whereClause = {};
+    } else if (session) {
+      const userEmail = session.email.toLowerCase();
+      whereClause = {
+        status: { not: "DRAFT" },
+        OR: [
+          { accessType: "OPEN" },
+          {
+            accessType: "INVITE_ONLY",
+            participants: {
+              some: {
+                OR: [{ userId: session.userId }, { email: userEmail }],
+              },
+            },
           },
+          {
+            accessType: "INVITE_ONLY",
+            jurors: {
+              some: {
+                OR: [{ userId: session.userId }, { email: userEmail }],
+              },
+            },
+          },
+        ],
+      };
+    }
+
+    const contests = await prisma.contest.findMany({
+      where: whereClause,
       include: {
         topics: {
           select: { id: true, title: true, maxSubmissionsPerUser: true },
           orderBy: { orderIndex: "asc" },
         },
+        participants: session
+          ? {
+              where: {
+                OR: [
+                  { userId: session.userId },
+                  { email: session.email.toLowerCase() },
+                ],
+              },
+              select: { id: true, userId: true },
+            }
+          : false,
+        jurors: session
+          ? {
+              where: {
+                OR: [
+                  { userId: session.userId },
+                  { email: session.email.toLowerCase() },
+                ],
+              },
+              select: { id: true, userId: true },
+            }
+          : false,
         _count: {
           select: {
             submissions: true,
@@ -30,10 +81,18 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
     });
 
-    const enriched = contests.map((c) => ({
-      ...c,
-      effectiveStatus: getEffectiveStatus(c),
-    }));
+    const enriched = contests.map((c: any) => {
+      const isParticipant = Array.isArray(c.participants) && c.participants.length > 0;
+      const isJuror = Array.isArray(c.jurors) && c.jurors.length > 0;
+      const { participants, jurors, ...rest } = c;
+
+      return {
+        ...rest,
+        effectiveStatus: getEffectiveStatus(c),
+        isParticipant,
+        isJuror: isJuror || (c.votingMode === "PEER_REVIEW" && isParticipant),
+      };
+    });
 
     return NextResponse.json({ contests: enriched });
   } catch (error) {

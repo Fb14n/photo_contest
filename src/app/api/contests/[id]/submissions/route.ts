@@ -146,6 +146,58 @@ export async function POST(
       );
     }
 
+    const userEmail = session.email.toLowerCase();
+
+    // Access control for closed (INVITE_ONLY) contests
+    let userParticipant = null;
+    if (contest.accessType === "INVITE_ONLY" && !isAdmin) {
+      userParticipant = await prisma.contestParticipant.findFirst({
+        where: {
+          contestId: contest.id,
+          OR: [{ userId: session.userId }, { email: userEmail }],
+        },
+      });
+
+      if (!userParticipant) {
+        return NextResponse.json(
+          {
+            error: "Dieser Wettbewerb ist nur für geladene Teilnehmer zugänglich. Du wurdest zu diesem Wettbewerb nicht eingeladen.",
+          },
+          { status: 403 }
+        );
+      }
+
+      // Link participant record to user account if not yet linked
+      if (!userParticipant.userId) {
+        await prisma.contestParticipant.update({
+          where: { id: userParticipant.id },
+          data: { userId: session.userId, status: "REGISTERED" },
+        });
+      }
+    }
+
+    // Check max participants for OPEN contests if not already joined
+    if (contest.accessType === "OPEN" && contest.maxParticipants && !isAdmin) {
+      const isAlreadyParticipant = await prisma.contestParticipant.findFirst({
+        where: {
+          contestId: contest.id,
+          OR: [{ userId: session.userId }, { email: userEmail }],
+        },
+      });
+
+      if (!isAlreadyParticipant) {
+        const participantCount = await prisma.contestParticipant.count({
+          where: { contestId: contest.id },
+        });
+        if (participantCount >= contest.maxParticipants) {
+          return NextResponse.json(
+            { error: "Die maximale Teilnehmeranzahl für diesen Wettbewerb ist bereits erreicht." },
+            { status: 403 }
+          );
+        }
+      }
+    }
+
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     const topicId = formData.get("topicId") as string | null;
@@ -262,6 +314,31 @@ export async function POST(
         takenAt: imageMeta.takenAt,
       },
     });
+
+    // Ensure user is registered as participant in contest
+    const existingPart = await prisma.contestParticipant.findFirst({
+      where: {
+        contestId: contest.id,
+        OR: [{ userId: session.userId }, { email: userEmail }],
+      },
+    });
+
+    if (!existingPart) {
+      await prisma.contestParticipant.create({
+        data: {
+          contestId: contest.id,
+          userId: session.userId,
+          email: userEmail,
+          name: session.name,
+          status: "REGISTERED",
+        },
+      });
+    } else if (!existingPart.userId) {
+      await prisma.contestParticipant.update({
+        where: { id: existingPart.id },
+        data: { userId: session.userId, status: "REGISTERED" },
+      });
+    }
 
     return NextResponse.json({ success: true, submission });
   } catch (error) {

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Camera, Shield, User as UserIcon, LogOut, Award, PlusCircle, KeyRound } from "lucide-react";
+import { Camera, Shield, User as UserIcon, LogOut, Award, PlusCircle, KeyRound, Users } from "lucide-react";
 
 interface UserSession {
   userId: string;
@@ -68,13 +68,24 @@ export default function Navbar() {
               <Link
                 href="/admin"
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors ${
-                  pathname === "/admin" || (pathname.startsWith("/admin") && pathname !== "/admin/contests/new")
+                  pathname === "/admin"
                     ? "text-purple-400 bg-purple-500/10"
                     : "text-neutral-300 hover:text-white hover:bg-neutral-900"
                 }`}
               >
                 <Shield className="h-4 w-4" />
-                Admin Dashboard
+                Wettbewerbe
+              </Link>
+              <Link
+                href="/admin/users"
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors ${
+                  pathname.startsWith("/admin/users")
+                    ? "text-purple-400 bg-purple-500/10"
+                    : "text-neutral-300 hover:text-white hover:bg-neutral-900"
+                }`}
+              >
+                <Users className="h-4 w-4" />
+                Nutzerverwaltung
               </Link>
               <Link
                 href="/admin/contests/new"
@@ -126,13 +137,22 @@ export default function Navbar() {
                   </div>
 
                   {user.role === "ADMIN" && (
-                    <Link
-                      href="/admin"
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg text-neutral-300 hover:bg-neutral-800 hover:text-white transition"
-                    >
-                      <Shield className="h-4 w-4 text-purple-400" />
-                      Admin-Bereich
-                    </Link>
+                    <>
+                      <Link
+                        href="/admin"
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-neutral-300 hover:bg-neutral-800 hover:text-white transition"
+                      >
+                        <Shield className="h-4 w-4 text-purple-400" />
+                        Wettbewerbe verwalten
+                      </Link>
+                      <Link
+                        href="/admin/users"
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-neutral-300 hover:bg-neutral-800 hover:text-white transition"
+                      >
+                        <Users className="h-4 w-4 text-purple-400" />
+                        Nutzerverwaltung
+                      </Link>
+                    </>
                   )}
 
                   <Link

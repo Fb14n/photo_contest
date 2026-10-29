@@ -31,9 +31,9 @@ export default function RootLayout({
           <Navbar />
         </Suspense>
         <main className="flex-1">{children}</main>
-        <footer className="border-t border-neutral-900 bg-neutral-950/80 py-8 text-center text-xs text-neutral-400">
+        <footer className="border-t border-neutral-900 bg-neutral-950/80 py-8 text-center text-xs text-neutral-500">
           <div className="mx-auto max-w-7xl px-4">
-            <p>PhotoContest Plattform • Selbstgehostet & Lokale SQLite-Datenbank</p>
+            <p>© {new Date().getFullYear()} PhotoContest • Fotowettbewerb-Plattform</p>
           </div>
         </footer>
       </body>

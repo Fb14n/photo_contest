@@ -165,6 +165,28 @@ export default function SubmitPhotoPage({
     );
   }
 
+  // Closed contest access control
+  if (contest.accessType === "INVITE_ONLY" && !contest.isParticipant && currentUser.role !== "ADMIN") {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-20 text-center">
+        <div className="h-14 w-14 rounded-2xl bg-amber-500/10 text-amber-400 flex items-center justify-center mx-auto mb-5">
+          <Lock className="h-7 w-7" />
+        </div>
+        <h2 className="text-2xl font-bold text-white mb-2">Geschlossener Wettbewerb</h2>
+        <p className="text-sm text-neutral-400 mb-6">
+          Dieser Wettbewerb ist nur für geladene Teilnehmer zugänglich. Dein Konto ({currentUser.email})
+          ist nicht auf der Teilnehmerliste dieses Wettbewerbs eingetragen.
+        </p>
+        <Link
+          href="/contests"
+          className="rounded-xl bg-neutral-800 px-5 py-2.5 text-sm font-semibold text-white hover:bg-neutral-700 transition"
+        >
+          Zurück zu den Wettbewerben
+        </Link>
+      </div>
+    );
+  }
+
   const isSubmissionActive = contest.effectiveStatus === "SUBMISSION" || currentUser.role === "ADMIN";
 
   const rules: UploadRules = {

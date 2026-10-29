@@ -108,13 +108,22 @@ export default function ContestCard({ contest }: { contest: ContestCardData }) {
 
         <div className="flex items-center gap-2">
           {contest.effectiveStatus === "SUBMISSION" && (
-            <Link
-              href={`/contests/${contest.slug}/submit`}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-sky-500 px-3.5 py-1.5 text-xs font-semibold text-white shadow-md shadow-sky-500/20 hover:bg-sky-400 transition"
-            >
-              Foto hochladen
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
+            contest.accessType === "INVITE_ONLY" && !contest.isParticipant ? (
+              <Link
+                href={`/contests/${contest.slug}`}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-neutral-700 bg-neutral-800 px-3.5 py-1.5 text-xs font-medium text-white hover:bg-neutral-700 transition"
+              >
+                Details ansehen
+              </Link>
+            ) : (
+              <Link
+                href={`/contests/${contest.slug}/submit`}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-sky-500 px-3.5 py-1.5 text-xs font-semibold text-white shadow-md shadow-sky-500/20 hover:bg-sky-400 transition"
+              >
+                Foto hochladen
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            )
           )}
 
           {contest.effectiveStatus === "RATING" && (

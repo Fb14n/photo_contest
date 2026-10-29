@@ -154,13 +154,22 @@ export default function AdminDashboardPage() {
           </p>
         </div>
 
-        <Link
-          href="/admin/contests/new"
-          className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-purple-600/20 hover:bg-purple-500 transition"
-        >
-          <PlusCircle className="h-4 w-4" />
-          Neuen Wettbewerb anlegen
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/admin/users"
+            className="inline-flex items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-2.5 text-sm font-semibold text-neutral-200 hover:text-white hover:bg-neutral-800 transition shadow-sm"
+          >
+            <Users className="h-4 w-4 text-purple-400" />
+            Nutzerverwaltung
+          </Link>
+          <Link
+            href="/admin/contests/new"
+            className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-purple-600/20 hover:bg-purple-500 transition"
+          >
+            <PlusCircle className="h-4 w-4" />
+            Neuen Wettbewerb anlegen
+          </Link>
+        </div>
       </div>
 
       {actionSuccess && (

@@ -214,13 +214,20 @@ export default function ContestDetailPage({
         {/* Action Button Bar */}
         <div className="mt-8 flex flex-wrap items-center gap-4 border-t border-neutral-800/80 pt-6">
           {contest.effectiveStatus === "SUBMISSION" && (
-            <Link
-              href={`/contests/${contest.slug}/submit`}
-              className="inline-flex items-center gap-2 rounded-xl bg-sky-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-sky-500/20 hover:bg-sky-400 transition"
-            >
-              Foto jetzt einreichen
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+            contest.accessType === "INVITE_ONLY" && !contest.isParticipant && !isAdmin ? (
+              <div className="inline-flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs font-medium text-amber-300">
+                <Lock className="h-4 w-4 text-amber-400" />
+                Geschlossener Wettbewerb (Nur für geladene Teilnehmer)
+              </div>
+            ) : (
+              <Link
+                href={`/contests/${contest.slug}/submit`}
+                className="inline-flex items-center gap-2 rounded-xl bg-sky-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-sky-500/20 hover:bg-sky-400 transition"
+              >
+                Foto jetzt einreichen
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            )
           )}
 
           {contest.effectiveStatus === "RATING" && (

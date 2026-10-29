@@ -64,18 +64,49 @@ export async function GET(
     let userParticipation = null;
     let userJuror = null;
     if (session) {
+      const userEmail = session.email.toLowerCase();
       userParticipation = await prisma.contestParticipant.findFirst({
         where: {
           contestId: contest.id,
-          OR: [{ userId: session.userId }, { email: session.email }],
+          OR: [{ userId: session.userId }, { email: userEmail }],
         },
       });
       userJuror = await prisma.contestJuror.findFirst({
         where: {
           contestId: contest.id,
-          OR: [{ userId: session.userId }, { email: session.email }],
+          OR: [{ userId: session.userId }, { email: userEmail }],
         },
       });
+
+      // Auto-link userId if participant was invited by email
+      if (userParticipation && !userParticipation.userId) {
+        await prisma.contestParticipant.update({
+          where: { id: userParticipation.id },
+          data: { userId: session.userId, status: "REGISTERED" },
+        });
+      }
+      if (userJuror && !userJuror.userId) {
+        await prisma.contestJuror.update({
+          where: { id: userJuror.id },
+          data: { userId: session.userId, status: "ACTIVE" },
+        });
+      }
+    }
+
+    // Access control for closed (INVITE_ONLY) contests
+    if (contest.accessType === "INVITE_ONLY" && !isAdmin) {
+      if (!session) {
+        return NextResponse.json(
+          { error: "Dieser Wettbewerb ist geschlossen. Bitte melde dich an, um deinen Zugang zu prüfen." },
+          { status: 403 }
+        );
+      }
+      if (!userParticipation && !userJuror) {
+        return NextResponse.json(
+          { error: "Dieser Wettbewerb ist geschlossen (Nur mit Einladung). Du bist nicht als Teilnehmer oder Juror eingetragen." },
+          { status: 403 }
+        );
+      }
     }
 
     const effectiveStatus = getEffectiveStatus(contest);

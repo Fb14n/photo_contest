@@ -76,7 +76,7 @@ export default function HomePage() {
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-sky-500/30 bg-sky-500/10 px-3.5 py-1 text-xs font-medium text-sky-400 mb-6">
             <Sparkles className="h-3.5 w-3.5" />
-            <span>Selbstgehostete Fotowettbewerb-Plattform</span>
+            <span>Fotowettbewerbe online erstellen & jurieren</span>
           </div>
 
           <h1 className="text-4xl font-extrabold tracking-tight text-white sm:text-6xl max-w-4xl mx-auto leading-tight">
@@ -101,14 +101,24 @@ export default function HomePage() {
               <ArrowRight className="h-4 w-4" />
             </Link>
 
-            {currentUser?.role === "ADMIN" ? (
-              <Link
-                href="/admin"
-                className="inline-flex items-center gap-2 rounded-xl border border-neutral-700 bg-neutral-800/80 px-6 py-3 text-sm font-medium text-neutral-200 hover:bg-neutral-800 hover:text-white transition"
-              >
-                <Shield className="h-4 w-4 text-purple-400" />
-                Zum Admin-Dashboard
-              </Link>
+            {currentUser ? (
+              currentUser.role === "ADMIN" ? (
+                <Link
+                  href="/admin"
+                  className="inline-flex items-center gap-2 rounded-xl border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-sm font-medium text-purple-300 hover:bg-purple-500/20 transition"
+                >
+                  <Shield className="h-4 w-4 text-purple-400" />
+                  Zum Admin-Dashboard
+                </Link>
+              ) : (
+                <Link
+                  href="/profile"
+                  className="inline-flex items-center gap-2 rounded-xl border border-neutral-700 bg-neutral-800/80 px-6 py-3 text-sm font-medium text-neutral-200 hover:bg-neutral-800 hover:text-white transition"
+                >
+                  <Users className="h-4 w-4 text-sky-400" />
+                  Mein Profil & Dashboard
+                </Link>
+              )
             ) : (
               <Link
                 href="/login"
@@ -120,53 +130,55 @@ export default function HomePage() {
             )}
           </div>
 
-          {/* Quick Demo-Login Bar for Local Testing */}
-          <div className="mt-12 mx-auto max-w-3xl rounded-2xl border border-neutral-800 bg-neutral-900/60 p-5 backdrop-blur-md">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="text-left">
-                <span className="text-xs font-semibold text-sky-400 uppercase tracking-wider block">
-                  Schnelltest-Modus
-                </span>
-                <p className="text-xs text-neutral-400 mt-0.5">
-                  Mit 1 Klick als vorgefertigte Testrolle anmelden:
-                </p>
-              </div>
+          {/* Quick Demo-Login Bar for Local Testing (Only shown if NEXT_PUBLIC_SHOW_DEMO=true) */}
+          {process.env.NEXT_PUBLIC_SHOW_DEMO === "true" && (
+            <div className="mt-12 mx-auto max-w-3xl rounded-2xl border border-neutral-800 bg-neutral-900/60 p-5 backdrop-blur-md">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="text-left">
+                  <span className="text-xs font-semibold text-sky-400 uppercase tracking-wider block">
+                    Schnelltest-Modus
+                  </span>
+                  <p className="text-xs text-neutral-400 mt-0.5">
+                    Mit 1 Klick als vorgefertigte Testrolle anmelden:
+                  </p>
+                </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  onClick={() => handleDemoLogin("admin@fotowettbewerb.local", "Admin123!")}
-                  disabled={demoUserLoading !== null}
-                  className="rounded-lg border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs font-medium text-purple-300 hover:bg-purple-500/20 transition disabled:opacity-50"
-                >
-                  {demoUserLoading === "admin@fotowettbewerb.local" ? "Lädt..." : "👑 Admin"}
-                </button>
-                <button
-                  onClick={() => handleDemoLogin("juror.anna@fotowettbewerb.local", "Jury123!")}
-                  disabled={demoUserLoading !== null}
-                  className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3 py-1.5 text-xs font-medium text-indigo-300 hover:bg-indigo-500/20 transition disabled:opacity-50"
-                >
-                  {demoUserLoading === "juror.anna@fotowettbewerb.local" ? "Lädt..." : "⚖️ Juror (Anna)"}
-                </button>
-                <button
-                  onClick={() => handleDemoLogin("clara.fotografin@fotowettbewerb.local", "User123!")}
-                  disabled={demoUserLoading !== null}
-                  className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-1.5 text-xs font-medium text-sky-300 hover:bg-sky-500/20 transition disabled:opacity-50"
-                >
-                  {demoUserLoading === "clara.fotografin@fotowettbewerb.local" ? "Lädt..." : "📷 Teilnehmer (Clara)"}
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => handleDemoLogin("admin@fotowettbewerb.local", "Admin123!")}
+                    disabled={demoUserLoading !== null}
+                    className="rounded-lg border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs font-medium text-purple-300 hover:bg-purple-500/20 transition disabled:opacity-50"
+                  >
+                    {demoUserLoading === "admin@fotowettbewerb.local" ? "Lädt..." : "👑 Admin"}
+                  </button>
+                  <button
+                    onClick={() => handleDemoLogin("juror.anna@fotowettbewerb.local", "Jury123!")}
+                    disabled={demoUserLoading !== null}
+                    className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3 py-1.5 text-xs font-medium text-indigo-300 hover:bg-indigo-500/20 transition disabled:opacity-50"
+                  >
+                    {demoUserLoading === "juror.anna@fotowettbewerb.local" ? "Lädt..." : "⚖️ Juror (Anna)"}
+                  </button>
+                  <button
+                    onClick={() => handleDemoLogin("clara.fotografin@fotowettbewerb.local", "User123!")}
+                    disabled={demoUserLoading !== null}
+                    className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-1.5 text-xs font-medium text-sky-300 hover:bg-sky-500/20 transition disabled:opacity-50"
+                  >
+                    {demoUserLoading === "clara.fotografin@fotowettbewerb.local" ? "Lädt..." : "📷 Teilnehmer (Clara)"}
+                  </button>
+                </div>
               </div>
+              {currentUser && (
+                <div className="mt-3 pt-3 border-t border-neutral-800/80 text-xs text-emerald-400 flex items-center justify-between">
+                  <span>
+                    ✓ Aktuell angemeldet als: <strong>{currentUser.name}</strong> ({currentUser.role})
+                  </span>
+                  <Link href="/profile" className="text-neutral-400 hover:text-white underline">
+                    Profil ansehen
+                  </Link>
+                </div>
+              )}
             </div>
-            {currentUser && (
-              <div className="mt-3 pt-3 border-t border-neutral-800/80 text-xs text-emerald-400 flex items-center justify-between">
-                <span>
-                  ✓ Aktuell angemeldet als: <strong>{currentUser.name}</strong> ({currentUser.role})
-                </span>
-                <Link href="/profile" className="text-neutral-400 hover:text-white underline">
-                  Profil ansehen
-                </Link>
-              </div>
-            )}
-          </div>
+          )}
         </div>
       </section>
 

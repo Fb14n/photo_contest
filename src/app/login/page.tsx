@@ -63,39 +63,41 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* 1-Click Demo Logins Box */}
-        <div className="mb-6 rounded-2xl border border-neutral-800 bg-neutral-900/60 p-4 backdrop-blur-md">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-sky-400 mb-2">
-            <Sparkles className="h-3.5 w-3.5" />
-            <span>Schnellanmeldung (1-Klick Demo-Rollen)</span>
+        {/* 1-Click Demo Logins Box (Only shown if NEXT_PUBLIC_SHOW_DEMO=true) */}
+        {process.env.NEXT_PUBLIC_SHOW_DEMO === "true" && (
+          <div className="mb-6 rounded-2xl border border-neutral-800 bg-neutral-900/60 p-4 backdrop-blur-md">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-sky-400 mb-2">
+              <Sparkles className="h-3.5 w-3.5" />
+              <span>Schnellanmeldung (1-Klick Demo-Rollen)</span>
+            </div>
+            <p className="text-[11px] text-neutral-400 mb-3">
+              Klicke auf einen Button, um dich ohne Passworteingabe sofort in der jeweiligen Rolle anzumelden:
+            </p>
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => handleLogin("admin@fotowettbewerb.local", "Admin123!")}
+                className="rounded-lg border border-purple-500/30 bg-purple-500/10 p-2 text-purple-300 hover:bg-purple-500/20 transition text-center font-medium"
+              >
+                👑 Admin
+              </button>
+              <button
+                type="button"
+                onClick={() => handleLogin("juror.anna@fotowettbewerb.local", "Jury123!")}
+                className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 p-2 text-indigo-300 hover:bg-indigo-500/20 transition text-center font-medium"
+              >
+                ⚖️ Juror Anna
+              </button>
+              <button
+                type="button"
+                onClick={() => handleLogin("clara.fotografin@fotowettbewerb.local", "User123!")}
+                className="rounded-lg border border-sky-500/30 bg-sky-500/10 p-2 text-sky-300 hover:bg-sky-500/20 transition text-center font-medium"
+              >
+                📷 Clara (Fotograf)
+              </button>
+            </div>
           </div>
-          <p className="text-[11px] text-neutral-400 mb-3">
-            Klicke auf einen Button, um dich ohne Passworteingabe sofort in der jeweiligen Rolle anzumelden:
-          </p>
-          <div className="grid grid-cols-3 gap-2 text-xs">
-            <button
-              type="button"
-              onClick={() => handleLogin("admin@fotowettbewerb.local", "Admin123!")}
-              className="rounded-lg border border-purple-500/30 bg-purple-500/10 p-2 text-purple-300 hover:bg-purple-500/20 transition text-center font-medium"
-            >
-              👑 Admin
-            </button>
-            <button
-              type="button"
-              onClick={() => handleLogin("juror.anna@fotowettbewerb.local", "Jury123!")}
-              className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 p-2 text-indigo-300 hover:bg-indigo-500/20 transition text-center font-medium"
-            >
-              ⚖️ Juror Anna
-            </button>
-            <button
-              type="button"
-              onClick={() => handleLogin("clara.fotografin@fotowettbewerb.local", "User123!")}
-              className="rounded-lg border border-sky-500/30 bg-sky-500/10 p-2 text-sky-300 hover:bg-sky-500/20 transition text-center font-medium"
-            >
-              📷 Clara (Fotograf)
-            </button>
-          </div>
-        </div>
+        )}
 
         {/* Login Form */}
         <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-6 sm:p-8 backdrop-blur-xl">
@@ -161,8 +163,8 @@ export default function LoginPage() {
 
           <div className="mt-6 border-t border-neutral-800/80 pt-4 text-center text-xs text-neutral-400">
             Noch kein Konto?{" "}
-            <Link href="/register" className="text-sky-400 hover:underline font-medium">
-              Jetzt registrieren
+            <Link href="/request-account" className="text-sky-400 hover:underline font-medium">
+              Nutzerkonto anfordern
             </Link>
           </div>
         </div>
