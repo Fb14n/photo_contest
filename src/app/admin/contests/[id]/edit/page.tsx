@@ -16,6 +16,10 @@ import {
   Plus,
   Trash2,
   Award,
+  Users,
+  Camera,
+  Info,
+  ExternalLink,
 } from "lucide-react";
 
 interface EditableTopic {
@@ -51,19 +55,29 @@ export default function EditContestPage({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // Contest basic details
+  const [contestSlug, setContestSlug] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [status, setStatus] = useState("SUBMISSION");
-  const [accessType, setAccessType] = useState("OPEN");
+
+  // Status & Publication
+  const [status, setStatus] = useState("AUTO");
+  const [accessType, setAccessType] = useState<"OPEN" | "INVITE_ONLY">("OPEN");
   const [maxParticipants, setMaxParticipants] = useState<string>("");
+  const [allowParticipantUploads, setAllowParticipantUploads] = useState(true);
+
+  // Dates
   const [submissionStart, setSubmissionStart] = useState("");
   const [submissionEnd, setSubmissionEnd] = useState("");
   const [ratingStart, setRatingStart] = useState("");
   const [ratingEnd, setRatingEnd] = useState("");
-  const [votingMode, setVotingMode] = useState("EXCLUSIVE_JURY");
+
+  // Voting Mode & Jury
+  const [votingMode, setVotingMode] = useState<"EXCLUSIVE_JURY" | "PEER_REVIEW">("EXCLUSIVE_JURY");
   const [anonymousJudging, setAnonymousJudging] = useState(true);
   const [publicResults, setPublicResults] = useState(true);
-  const [allowParticipantUploads, setAllowParticipantUploads] = useState(true);
+
+  // Image rules
   const [maxFileSizeMb, setMaxFileSizeMb] = useState(15.0);
   const [allowedFormats, setAllowedFormats] = useState("image/jpeg,image/png,image/webp");
   const [minWidth, setMinWidth] = useState<number | "">("");
@@ -72,6 +86,8 @@ export default function EditContestPage({
   const [maxHeight, setMaxHeight] = useState<number | "">("");
   const [aspectRatio, setAspectRatio] = useState("free");
   const [namingPattern, setNamingPattern] = useState("");
+
+  // Topics
   const [topics, setTopics] = useState<EditableTopic[]>([]);
 
   const handleAddTopic = () => {
@@ -98,21 +114,24 @@ export default function EditContestPage({
       .then((d) => {
         if (d.contest) {
           const c = d.contest;
+          setContestSlug(c.slug || c.id);
           setTitle(c.title);
           setDescription(c.description);
-          setStatus(c.status);
-          setAccessType(c.accessType);
+          setStatus(c.status || "AUTO");
+          setAccessType(c.accessType || "OPEN");
           setMaxParticipants(c.maxParticipants ? String(c.maxParticipants) : "");
           setSubmissionStart(toLocalDatetimeString(c.submissionStart));
           setSubmissionEnd(toLocalDatetimeString(c.submissionEnd));
           setRatingStart(toLocalDatetimeString(c.ratingStart));
           setRatingEnd(toLocalDatetimeString(c.ratingEnd));
-          setVotingMode(c.votingMode);
-          setAnonymousJudging(c.anonymousJudging);
+          setVotingMode(c.votingMode || "EXCLUSIVE_JURY");
+          setAnonymousJudging(c.anonymousJudging !== undefined ? Boolean(c.anonymousJudging) : true);
           setPublicResults(c.publicResults !== undefined ? Boolean(c.publicResults) : true);
-          setAllowParticipantUploads(c.allowParticipantUploads !== undefined ? Boolean(c.allowParticipantUploads) : true);
-          setMaxFileSizeMb(c.maxFileSizeMb);
-          setAllowedFormats(c.allowedFormats);
+          setAllowParticipantUploads(
+            c.allowParticipantUploads !== undefined ? Boolean(c.allowParticipantUploads) : true
+          );
+          setMaxFileSizeMb(c.maxFileSizeMb || 15.0);
+          setAllowedFormats(c.allowedFormats || "image/jpeg,image/png,image/webp");
           setMinWidth(c.minWidth || "");
           setMinHeight(c.minHeight || "");
           setMaxWidth(c.maxWidth || "");
@@ -135,7 +154,7 @@ export default function EditContestPage({
           setErrorMessage("Wettbewerb nicht gefunden");
         }
       })
-      .catch(() => setErrorMessage("Fehler beim Laden"))
+      .catch(() => setErrorMessage("Fehler beim Laden des Wettbewerbs"))
       .finally(() => setLoading(false));
   }, [resolvedParams.id]);
 
@@ -150,13 +169,13 @@ export default function EditContestPage({
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title,
-          description,
+          title: title.trim(),
+          description: description.trim(),
           status,
           accessType,
           maxParticipants: maxParticipants ? parseInt(maxParticipants, 10) : null,
-          submissionStart,
-          submissionEnd,
+          submissionStart: allowParticipantUploads && submissionStart ? submissionStart : undefined,
+          submissionEnd: allowParticipantUploads && submissionEnd ? submissionEnd : undefined,
           ratingStart,
           ratingEnd,
           votingMode,
@@ -181,14 +200,14 @@ export default function EditContestPage({
       });
 
       const data = await res.json();
-      if (data.success) {
-        setSuccessMessage("Wettbewerb erfolgreich aktualisiert.");
-        setTimeout(() => setSuccessMessage(null), 3000);
+      if (res.ok && data.success) {
+        setSuccessMessage("Alle Einstellungen wurden erfolgreich und sicher aktualisiert!");
+        setTimeout(() => setSuccessMessage(null), 4000);
       } else {
-        setErrorMessage(data.error || "Aktualisierung fehlgeschlagen");
+        setErrorMessage(data.error || "Aktualisierung fehlgeschlagen.");
       }
     } catch {
-      setErrorMessage("Fehler beim Speichern");
+      setErrorMessage("Netzwerkfehler beim Speichern der Einstellungen.");
     } finally {
       setIsSaving(false);
     }
@@ -212,181 +231,528 @@ export default function EditContestPage({
           Admin Dashboard
         </Link>
         <span>/</span>
-        <span className="text-emerald-400">Wettbewerb bearbeiten</span>
+        <span className="text-purple-400 font-medium">Wettbewerb bearbeiten</span>
       </div>
 
+      {/* Header bar */}
       <div className="border-b border-neutral-800 pb-6 mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-extrabold text-white">Wettbewerb bearbeiten</h1>
           <p className="mt-1 text-sm text-neutral-400">
-            Passe Fristen, Regeln oder Status für <strong className="text-neutral-200">{title}</strong> an.
+            Passe Fristen, Zugangsarten, Bewertungsmodi und Regeln für <strong className="text-white font-semibold">{title}</strong> an.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {contestSlug && (
+            <Link
+              href={`/contests/${contestSlug}`}
+              target="_blank"
+              className="rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 flex items-center gap-1.5 transition"
+            >
+              <span>Vorschau</span>
+              <ExternalLink className="h-3 w-3" />
+            </Link>
+          )}
           <Link
-            href={`/admin/contests/${resolvedParams.id}/stats`}
-            className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-300 hover:text-white hover:bg-neutral-800"
+            href={`/admin/contests/${resolvedParams.id}/submissions`}
+            className="rounded-xl border border-purple-500/40 bg-purple-500/10 px-3 py-1.5 text-xs font-semibold text-purple-300 hover:bg-purple-500/20 transition flex items-center gap-1.5"
           >
-            Statistiken
+            <Camera className="h-3.5 w-3.5" />
+            <span>Gott-Modus Bilder</span>
           </Link>
           <Link
             href={`/admin/contests/${resolvedParams.id}/invites`}
-            className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-300 hover:text-white hover:bg-neutral-800"
+            className="rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 transition flex items-center gap-1.5"
           >
-            Einladungen
+            <Users className="h-3.5 w-3.5" />
+            <span>Einladungen</span>
+          </Link>
+          <Link
+            href={`/admin/contests/${resolvedParams.id}/stats`}
+            className="rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 transition"
+          >
+            Statistiken
           </Link>
         </div>
       </div>
 
       {successMessage && (
-        <div className="mb-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-xs text-emerald-300 flex items-center gap-2">
-          <CheckCircle className="h-4 w-4 shrink-0 text-emerald-400" />
-          <span>{successMessage}</span>
+        <div className="mb-6 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-xs text-emerald-300 flex items-center gap-2.5 animate-in fade-in">
+          <CheckCircle className="h-5 w-5 shrink-0 text-emerald-400" />
+          <span className="font-medium">{successMessage}</span>
         </div>
       )}
 
       {errorMessage && (
-        <div className="mb-6 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs text-rose-300 flex items-center gap-2">
-          <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
-          <span>{errorMessage}</span>
+        <div className="mb-6 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs text-rose-300 flex items-center gap-2.5 animate-in fade-in">
+          <AlertCircle className="h-5 w-5 shrink-0 text-rose-400" />
+          <span className="font-medium">{errorMessage}</span>
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-8">
-        {/* Status override */}
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-6 space-y-4">
-          <h2 className="text-base font-semibold text-white">Status & Veröffentlichung</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* SECTION 1: Status & Veröffentlichung */}
+        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-6 space-y-5">
+          <div className="flex items-center gap-2 border-b border-neutral-800 pb-3">
+            <Sparkles className="h-4 w-4 text-purple-400" />
+            <h2 className="text-base font-semibold text-white">1. Status & Manuelle Steuerung</h2>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-neutral-300 mb-1.5">Wettbewerbs-Status</label>
+              <label className="block text-xs font-semibold text-neutral-300 mb-1.5">
+                Wettbewerbs-Status (Phasen-Steuerung)
+              </label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
-                className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3.5 py-2 text-xs text-white"
+                className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3.5 py-2.5 text-xs text-white focus:border-purple-500 focus:outline-none"
               >
-                <option value="AUTO">Automatisch (nach Zeitplan / Fristen)</option>
-                <option value="SUBMISSION">SUBMISSION (Manuell: Einreichungsphase erzwingen)</option>
-                <option value="RATING">RATING (Manuell: Jurierungsphase erzwingen)</option>
-                <option value="FINISHED">FINISHED (Manuell: Abgeschlossen)</option>
-                <option value="DRAFT">DRAFT (Entwurf / Verborgen)</option>
+                <option value="AUTO">Automatisch (Phasen wechseln nach Fristen / Zeitplan)</option>
+                <option value="SUBMISSION">SUBMISSION (Manuell: Einreichungsphase aktiv halten)</option>
+                <option value="RATING">RATING (Manuell: Jurierungsphase sofort aktivieren)</option>
+                <option value="FINISHED">FINISHED (Manuell: Wettbewerb abschließen & auswerten)</option>
+                <option value="DRAFT">DRAFT (Entwurf / für Teilnehmer verborgen)</option>
                 <option value="ARCHIVED">ARCHIVED (Archiv)</option>
               </select>
+              <p className="text-[11px] text-neutral-400 mt-1.5">
+                Wähle <em>Automatisch</em>, damit sich die Phase pünktlich nach den Fristen unten richtet, oder überschreibe die Phase manuell.
+              </p>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-neutral-300 mb-1.5">Zugangstyp</label>
-              <select
-                value={accessType}
-                onChange={(e) => setAccessType(e.target.value)}
-                className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3.5 py-2 text-xs text-white"
-              >
-                <option value="OPEN">Offener Link (Öffentlich)</option>
-                <option value="INVITE_ONLY">Geschlossen (Nur mit Einladung)</option>
-              </select>
-            </div>
+              <label className="block text-xs font-semibold text-neutral-300 mb-1.5">
+                Ablauf-Modus & Upload-Rechte
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAllowParticipantUploads(true)}
+                  className={`rounded-xl p-2.5 text-xs font-bold border text-left transition flex flex-col justify-between ${
+                    allowParticipantUploads
+                      ? "border-sky-500 bg-sky-500/10 text-white shadow-sm"
+                      : "border-neutral-800 bg-neutral-950/60 text-neutral-400 hover:border-neutral-700"
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5 text-sky-400">
+                    <Camera className="h-3.5 w-3.5" />
+                    Regulär
+                  </span>
+                  <span className="text-[10px] font-normal text-neutral-400 mt-1">
+                    Teilnehmer laden eigene Fotos hoch
+                  </span>
+                </button>
 
-            <div>
-              <label className="block text-xs font-medium text-neutral-300 mb-1.5">Max. Teilnehmer</label>
-              <input
-                type="number"
-                value={maxParticipants}
-                onChange={(e) => setMaxParticipants(e.target.value)}
-                placeholder="Unbegrenzt"
-                className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3.5 py-2 text-xs text-white"
-              />
+                <button
+                  type="button"
+                  onClick={() => setAllowParticipantUploads(false)}
+                  className={`rounded-xl p-2.5 text-xs font-bold border text-left transition flex flex-col justify-between ${
+                    !allowParticipantUploads
+                      ? "border-purple-500 bg-purple-500/10 text-white shadow-sm"
+                      : "border-neutral-800 bg-neutral-950/60 text-neutral-400 hover:border-neutral-700"
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5 text-purple-400">
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    Direkt-Jurierung
+                  </span>
+                  <span className="text-[10px] font-normal text-neutral-400 mt-1">
+                    Admin stellt alle Bilder bereit
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Basic fields */}
+        {/* SECTION 2: Allgemeine Angaben */}
         <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-6 space-y-4">
-          <h2 className="text-base font-semibold text-white">Allgemeine Angaben</h2>
+          <div className="flex items-center gap-2 border-b border-neutral-800 pb-3">
+            <Info className="h-4 w-4 text-neutral-400" />
+            <h2 className="text-base font-semibold text-white">2. Allgemeine Angaben</h2>
+          </div>
+
           <div>
-            <label className="block text-xs font-medium text-neutral-300 mb-1.5">Titel</label>
+            <label className="block text-xs font-medium text-neutral-300 mb-1.5">Titel des Wettbewerbs *</label>
             <input
               type="text"
               required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3.5 py-2 text-sm text-white"
+              className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3.5 py-2.5 text-sm text-white focus:border-purple-500 focus:outline-none"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-neutral-300 mb-1.5">Beschreibung</label>
+            <label className="block text-xs font-medium text-neutral-300 mb-1.5">Beschreibung & Teilnahmebedingungen *</label>
             <textarea
               rows={4}
               required
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3.5 py-2 text-sm text-white"
+              className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3.5 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
             />
           </div>
         </div>
 
-        {/* Dates */}
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-6 space-y-4">
-          <h2 className="text-base font-semibold text-white">Zeiträume</h2>
+        {/* SECTION 3: Zugang & Teilnehmer */}
+        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-6 space-y-5">
+          <div className="flex items-center gap-2 border-b border-neutral-800 pb-3">
+            <Users className="h-4 w-4 text-sky-400" />
+            <h2 className="text-base font-semibold text-white">3. Zugang & Teilnehmer-Rechte</h2>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label
+              className={`flex flex-col justify-between rounded-xl border p-4 cursor-pointer transition ${
+                accessType === "OPEN"
+                  ? "border-sky-500 bg-sky-500/10"
+                  : "border-neutral-800 bg-neutral-950/60 hover:border-neutral-700"
+              }`}
+            >
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-sm text-white">Offener Link (Öffentlich)</span>
+                  <input
+                    type="radio"
+                    name="accessType"
+                    checked={accessType === "OPEN"}
+                    onChange={() => setAccessType("OPEN")}
+                    className="accent-sky-500"
+                  />
+                </div>
+                <p className="text-xs text-neutral-400 mt-2">
+                  Jeder mit dem Link kann teilnehmen, indem er sich anmeldet und Fotos einreicht.
+                </p>
+              </div>
+            </label>
+
+            <label
+              className={`flex flex-col justify-between rounded-xl border p-4 cursor-pointer transition ${
+                accessType === "INVITE_ONLY"
+                  ? "border-amber-500 bg-amber-500/10"
+                  : "border-neutral-800 bg-neutral-950/60 hover:border-neutral-700"
+              }`}
+            >
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-sm text-white flex items-center gap-1.5">
+                    <Lock className="h-3.5 w-3.5 text-amber-400" />
+                    Geschlossen (Nur mit Einladung)
+                  </span>
+                  <input
+                    type="radio"
+                    name="accessType"
+                    checked={accessType === "INVITE_ONLY"}
+                    onChange={() => setAccessType("INVITE_ONLY")}
+                    className="accent-amber-500"
+                  />
+                </div>
+                <p className="text-xs text-neutral-400 mt-2">
+                  Nur Personen auf der Teilnehmer- oder Jury-Liste erhalten Zugang per persönlichem Link.
+                </p>
+              </div>
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
             <div>
-              <label className="block text-xs text-neutral-400 mb-1">Einreichung Start</label>
+              <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                Max. Teilnehmer (optional)
+              </label>
               <input
-                type="datetime-local"
-                value={submissionStart}
-                onChange={(e) => setSubmissionStart(e.target.value)}
-                className="w-full rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-xs text-white"
+                type="number"
+                min={1}
+                value={maxParticipants}
+                onChange={(e) => setMaxParticipants(e.target.value)}
+                placeholder="Unbegrenzt (leer lassen)"
+                className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3.5 py-2 text-xs text-white focus:border-sky-500 focus:outline-none"
               />
+              <span className="text-[11px] text-neutral-400 mt-1 block">
+                Begrenzt die Gesamtzahl an teilnehmenden Personen bei offenen Wettbewerben.
+              </span>
             </div>
-            <div>
-              <label className="block text-xs text-neutral-400 mb-1">Einreichung Ende</label>
-              <input
-                type="datetime-local"
-                value={submissionEnd}
-                onChange={(e) => setSubmissionEnd(e.target.value)}
-                className="w-full rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-xs text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-neutral-400 mb-1">Jurierung Start</label>
-              <input
-                type="datetime-local"
-                value={ratingStart}
-                onChange={(e) => setRatingStart(e.target.value)}
-                className="w-full rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-xs text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-neutral-400 mb-1">Jurierung Ende</label>
-              <input
-                type="datetime-local"
-                value={ratingEnd}
-                onChange={(e) => setRatingEnd(e.target.value)}
-                className="w-full rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-xs text-white"
-              />
+
+            <div className="flex flex-col justify-center bg-neutral-950/50 p-3.5 rounded-xl border border-neutral-800">
+              <span className="text-xs font-semibold text-white mb-1">Teilnehmer- & Jury-Listen verwalten</span>
+              <p className="text-[11px] text-neutral-400 mb-2">
+                Weitere Personen per E-Mail einladen oder Einladungslinks kopieren:
+              </p>
+              <Link
+                href={`/admin/contests/${resolvedParams.id}/invites`}
+                className="text-xs text-sky-400 hover:text-sky-300 font-semibold flex items-center gap-1"
+              >
+                <span>Zur Einladungsverwaltung öffnen</span>
+                <ExternalLink className="h-3 w-3" />
+              </Link>
             </div>
           </div>
         </div>
 
-        {/* Topics / Categories */}
+        {/* SECTION 4: Fristen & Zeiträume */}
+        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-6 space-y-5">
+          <div className="flex items-center gap-2 border-b border-neutral-800 pb-3">
+            <Calendar className="h-4 w-4 text-emerald-400" />
+            <h2 className="text-base font-semibold text-white">4. Fristen & Zeiträume</h2>
+          </div>
+
+          {!allowParticipantUploads ? (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-purple-500/30 bg-purple-500/10 p-4 text-xs text-purple-300 flex items-center gap-2.5">
+                <ShieldCheck className="h-4 w-4 shrink-0 text-purple-400" />
+                <span>
+                  <strong>Direkte Jurierung aktiv:</strong> Da Teilnehmer keine Fotos hochladen, entfällt die Einreichungsphase. Die Bewertung kann sofort oder nach individuellem Zeitplan stattfinden.
+                </span>
+              </div>
+
+              <div className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-4 space-y-3">
+                <span className="text-xs font-semibold uppercase tracking-wider text-purple-400 block">
+                  Jurierungsphase (0–10 Punkte)
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[11px] text-neutral-400 mb-1">Start der Bewertung *</label>
+                    <input
+                      type="datetime-local"
+                      required
+                      value={ratingStart}
+                      onChange={(e) => setRatingStart(e.target.value)}
+                      className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-neutral-400 mb-1">Ende der Bewertung (Deadline) *</label>
+                    <input
+                      type="datetime-local"
+                      required
+                      value={ratingEnd}
+                      onChange={(e) => setRatingEnd(e.target.value)}
+                      className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-white"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-4 space-y-3">
+                <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400 block">
+                  1. Einreichungsphase
+                </span>
+                <div>
+                  <label className="block text-[11px] text-neutral-400 mb-1">Beginn der Einreichung</label>
+                  <input
+                    type="datetime-local"
+                    value={submissionStart}
+                    onChange={(e) => setSubmissionStart(e.target.value)}
+                    className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-white"
+                  />
+                  <span className="text-[10px] text-neutral-500 mt-1 block">
+                    Datum, ab dem Teilnehmer Fotos hochladen dürfen.
+                  </span>
+                </div>
+                <div>
+                  <label className="block text-[11px] text-neutral-400 mb-1">Ende der Einreichung (Deadline) *</label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={submissionEnd}
+                    onChange={(e) => {
+                      const newEnd = e.target.value;
+                      setSubmissionEnd(newEnd);
+                      // Auto-sync rating start to seamlessly follow submission end
+                      setRatingStart(newEnd);
+                      if (ratingEnd && ratingEnd <= newEnd) {
+                        const d = new Date(newEnd);
+                        d.setDate(d.getDate() + 7);
+                        setRatingEnd(d.toISOString().slice(0, 16));
+                      }
+                    }}
+                    className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-white"
+                  />
+                  <span className="text-[10px] text-neutral-500 mt-1 block">
+                    Ab diesem Moment schließt der Foto-Upload für Teilnehmer.
+                  </span>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-4 space-y-3">
+                <span className="text-xs font-semibold uppercase tracking-wider text-purple-400 block">
+                  2. Jurierungsphase (0–10 Punkte)
+                </span>
+                <div>
+                  <label className="block text-[11px] text-neutral-400 mb-1">Start der Bewertung *</label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={ratingStart}
+                    onChange={(e) => setRatingStart(e.target.value)}
+                    className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-white"
+                  />
+                  <span className="text-[10px] text-neutral-500 mt-1 block">
+                    Schließt im Idealfall direkt an die Einreichungs-Deadline an.
+                  </span>
+                </div>
+                <div>
+                  <label className="block text-[11px] text-neutral-400 mb-1">Ende der Bewertung (Ergebnis steht fest) *</label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={ratingEnd}
+                    onChange={(e) => setRatingEnd(e.target.value)}
+                    className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-white"
+                  />
+                  <span className="text-[10px] text-neutral-500 mt-1 block">
+                    Fristende für alle Noten.
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* SECTION 5: Bewertungssystem & Jury-Modus */}
+        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-6 space-y-5">
+          <div className="flex items-center gap-2 border-b border-neutral-800 pb-3">
+            <ShieldCheck className="h-4 w-4 text-purple-400" />
+            <h2 className="text-base font-semibold text-white">5. Bewertung & Jury-Modus</h2>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label
+              className={`flex flex-col justify-between rounded-xl border p-4 cursor-pointer transition ${
+                votingMode === "EXCLUSIVE_JURY"
+                  ? "border-purple-500 bg-purple-500/10"
+                  : "border-neutral-800 bg-neutral-950/60 hover:border-neutral-700"
+              }`}
+            >
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-sm text-white flex items-center gap-1.5">
+                    <ShieldCheck className="h-4 w-4 text-purple-400" />
+                    Exklusive Fach-Jury
+                  </span>
+                  <input
+                    type="radio"
+                    name="votingMode"
+                    checked={votingMode === "EXCLUSIVE_JURY"}
+                    onChange={() => setVotingMode("EXCLUSIVE_JURY")}
+                    className="accent-purple-500"
+                  />
+                </div>
+                <p className="text-xs text-neutral-400 mt-2 leading-relaxed">
+                  Normale Teilnehmer können die Bilder nicht bewerten. Nur ausgewählte Personen mit Jury-Zugang vergeben Punkte (0 bis 10).
+                </p>
+              </div>
+            </label>
+
+            <label
+              className={`flex flex-col justify-between rounded-xl border p-4 cursor-pointer transition ${
+                votingMode === "PEER_REVIEW"
+                  ? "border-purple-500 bg-purple-500/10"
+                  : "border-neutral-800 bg-neutral-950/60 hover:border-neutral-700"
+              }`}
+            >
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-sm text-white flex items-center gap-1.5">
+                    <Users className="h-4 w-4 text-purple-400" />
+                    Teilnehmer-Bewertung (Peer-Review)
+                  </span>
+                  <input
+                    type="radio"
+                    name="votingMode"
+                    checked={votingMode === "PEER_REVIEW"}
+                    onChange={() => setVotingMode("PEER_REVIEW")}
+                    className="accent-purple-500"
+                  />
+                </div>
+                <p className="text-xs text-neutral-400 mt-2 leading-relaxed">
+                  Alle registrierten Teilnehmer bewerten sich gegenseitig. Das eigene Bild ist bei jedem Teilnehmer automatisch von der Bewertung ausgeschlossen.
+                </p>
+              </div>
+            </label>
+          </div>
+
+          <div className="pt-3 border-t border-neutral-800/80 space-y-3">
+            {/* Anonymous judging toggle */}
+            <div className="flex items-start justify-between gap-4 border border-neutral-800/80 bg-neutral-950/60 p-4 rounded-xl">
+              <div>
+                <label className="text-xs font-semibold text-white block">
+                  Anonyme Bewertung aktivieren
+                </label>
+                <p className="text-xs text-neutral-400 mt-1 max-w-xl leading-relaxed">
+                  Namen der Fotografen werden für Juroren während der Bewertung ausgeblendet, um neutrale Punktevergabe sicherzustellen.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={anonymousJudging}
+                onClick={() => setAnonymousJudging(!anonymousJudging)}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  anonymousJudging ? "bg-purple-600" : "bg-neutral-700"
+                }`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    anonymousJudging ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Public results toggle */}
+            <div className="flex items-start justify-between gap-4 border border-neutral-800/80 bg-neutral-950/60 p-4 rounded-xl">
+              <div>
+                <label className="text-xs font-semibold text-white block">
+                  Ergebnisse für Teilnehmer öffentlich freischalten
+                </label>
+                <p className="text-xs text-neutral-400 mt-1 max-w-xl leading-relaxed">
+                  Wenn aktiviert, können alle Teilnehmer nach Ablauf der Jurierungsphase die Rangliste und Punkte einsehen. Wenn deaktiviert, kann nur der Admin die Ergebnisse einsehen.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={publicResults}
+                onClick={() => setPublicResults(!publicResults)}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  publicResults ? "bg-emerald-600" : "bg-neutral-700"
+                }`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    publicResults ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* SECTION 6: Themenkategorien (Sparten) */}
         <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-6 space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
             <div>
               <h2 className="text-base font-semibold text-white flex items-center gap-2">
                 <Layers className="h-4 w-4 text-purple-400" />
-                Themenkategorien ({topics.length})
+                6. Themenkategorien / Sparten ({topics.length})
               </h2>
               <p className="text-xs text-neutral-400 mt-0.5">
-                Verwalte Themen für diesen Wettbewerb. Hinweis: Themen mit bestehenden Fotoeinreichungen können zum Schutz vor Datenverlust nicht gelöscht werden.
+                Verwalte die Sparten des Wettbewerbs. Themen mit bereits vorhandenen Einreichungen sind vor versehentlichem Löschen geschützt.
               </p>
             </div>
             <button
               type="button"
               onClick={handleAddTopic}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs font-medium text-purple-300 hover:bg-purple-500/20 transition"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-purple-500/30 bg-purple-500/10 px-3.5 py-1.5 text-xs font-semibold text-purple-300 hover:bg-purple-500/20 transition"
             >
               <Plus className="h-3.5 w-3.5" />
-              Thema hinzufügen
+              Sparte hinzufügen
             </button>
           </div>
 
@@ -396,28 +762,30 @@ export default function EditContestPage({
                 key={topic.id || `topic-${index}`}
                 className="rounded-xl border border-neutral-800 bg-neutral-950 p-4 space-y-3"
               >
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-2 flex-1">
-                    <span className="text-xs font-semibold text-purple-400 w-5">#{index + 1}</span>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 flex-1 w-full">
+                    <span className="text-xs font-bold text-purple-400 w-6">#{index + 1}</span>
                     <input
                       type="text"
                       required
-                      placeholder="Thementitel (z. B. Schwarzweiß, Makro, Landschaft)"
+                      placeholder="Thementitel (z. B. Freies Thema, Architektur, Makro)"
                       value={topic.title}
                       onChange={(e) => handleTopicChange(index, "title", e.target.value)}
                       className="flex-1 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-white placeholder-neutral-500 focus:border-purple-500 focus:outline-none"
                     />
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
                     <div className="flex items-center gap-1.5">
-                      <label className="text-[11px] text-neutral-400 whitespace-nowrap">Max. Fotos / Fotograf:</label>
+                      <label className="text-[11px] text-neutral-400 whitespace-nowrap">Max. Fotos / Person:</label>
                       <input
                         type="number"
                         min={1}
-                        max={10}
+                        max={20}
                         value={topic.maxSubmissionsPerUser}
-                        onChange={(e) => handleTopicChange(index, "maxSubmissionsPerUser", parseInt(e.target.value, 10) || 1)}
+                        onChange={(e) =>
+                          handleTopicChange(index, "maxSubmissionsPerUser", parseInt(e.target.value, 10) || 1)
+                        }
                         className="w-16 rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1 text-xs text-center text-white"
                       />
                     </div>
@@ -427,7 +795,7 @@ export default function EditContestPage({
                       onClick={() => handleRemoveTopic(index)}
                       disabled={topics.length <= 1}
                       className="p-1.5 text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition disabled:opacity-20"
-                      title="Thema entfernen"
+                      title="Sparte entfernen"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -448,41 +816,49 @@ export default function EditContestPage({
           </div>
         </div>
 
-        {/* Photo rules */}
+        {/* SECTION 7: Bildregeln & Technische Vorgaben */}
         <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-6 space-y-4">
-          <h2 className="text-base font-semibold text-white">Bildregeln</h2>
+          <div className="flex items-center gap-2 border-b border-neutral-800 pb-3">
+            <FileCheck className="h-4 w-4 text-amber-400" />
+            <h2 className="text-base font-semibold text-white">7. Bildregeln & Technische Vorgaben</h2>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs text-neutral-400 mb-1">Max. Dateigröße (MB)</label>
+              <label className="block text-xs font-medium text-neutral-300 mb-1.5">Max. Dateigröße (MB)</label>
               <input
                 type="number"
                 step="0.5"
+                min="1"
+                max="100"
                 value={maxFileSizeMb}
                 onChange={(e) => setMaxFileSizeMb(parseFloat(e.target.value) || 15)}
-                className="w-full rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-xs text-white"
+                className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs text-white"
               />
             </div>
+
             <div>
-              <label className="block text-xs text-neutral-400 mb-1">Seitenverhältnis</label>
+              <label className="block text-xs font-medium text-neutral-300 mb-1.5">Seitenverhältnis</label>
               <select
                 value={aspectRatio}
                 onChange={(e) => setAspectRatio(e.target.value)}
-                className="w-full rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-xs text-white"
+                className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs text-white"
               >
                 <option value="free">Frei wählbar</option>
-                <option value="3:2">3:2</option>
-                <option value="16:9">16:9</option>
-                <option value="4:3">4:3</option>
-                <option value="1:1">1:1</option>
+                <option value="3:2">3:2 (Standard Kleinbild / DSLR)</option>
+                <option value="16:9">16:9 (Breitbild)</option>
+                <option value="4:3">4:3 (MFT / Kompakt)</option>
+                <option value="1:1">1:1 (Quadratisch)</option>
               </select>
             </div>
+
             <div>
-              <label className="block text-xs text-neutral-400 mb-1">Erlaubte Formate</label>
+              <label className="block text-xs font-medium text-neutral-300 mb-1.5">Erlaubte Dateiformate</label>
               <input
                 type="text"
                 value={allowedFormats}
                 onChange={(e) => setAllowedFormats(e.target.value)}
-                className="w-full rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-xs text-white"
+                className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs text-white"
               />
             </div>
           </div>
@@ -494,6 +870,7 @@ export default function EditContestPage({
                 type="number"
                 value={minWidth}
                 onChange={(e) => setMinWidth(e.target.value ? Number(e.target.value) : "")}
+                placeholder="z. B. 1200"
                 className="w-full rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-xs text-white"
               />
             </div>
@@ -503,6 +880,7 @@ export default function EditContestPage({
                 type="number"
                 value={minHeight}
                 onChange={(e) => setMinHeight(e.target.value ? Number(e.target.value) : "")}
+                placeholder="z. B. 800"
                 className="w-full rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-xs text-white"
               />
             </div>
@@ -512,6 +890,7 @@ export default function EditContestPage({
                 type="number"
                 value={maxWidth}
                 onChange={(e) => setMaxWidth(e.target.value ? Number(e.target.value) : "")}
+                placeholder="Optional"
                 className="w-full rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-xs text-white"
               />
             </div>
@@ -521,88 +900,37 @@ export default function EditContestPage({
                 type="number"
                 value={maxHeight}
                 onChange={(e) => setMaxHeight(e.target.value ? Number(e.target.value) : "")}
+                placeholder="Optional"
                 className="w-full rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-xs text-white"
               />
             </div>
           </div>
         </div>
 
-        {/* Results & Visibility */}
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-6 space-y-4">
-          <h2 className="text-base font-semibold text-white flex items-center gap-2">
-            <Award className="h-4 w-4 text-emerald-400" />
-            Upload-Rechte & Ergebnis-Freigabe
-          </h2>
-
-          <div className="flex items-start justify-between gap-4 border border-neutral-800/80 bg-neutral-950/60 p-4 rounded-xl">
-            <div>
-              <label className="text-xs font-semibold text-white block">
-                Teilnehmer-Uploads erlauben
-              </label>
-              <p className="text-xs text-neutral-400 mt-1 max-w-xl leading-relaxed">
-                Wenn aktiviert (Standard), können Teilnehmer innerhalb der Frist eigene Fotos hochladen. Wenn deaktiviert, ist das Hochladen für Teilnehmer gesperrt und nur Administratoren können Fotos bereitstellen (z.B. wenn alle Bilder vorab durch den Admin hochgeladen werden).
-              </p>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={allowParticipantUploads}
-              onClick={() => setAllowParticipantUploads(!allowParticipantUploads)}
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                allowParticipantUploads ? "bg-sky-600" : "bg-neutral-700"
-              }`}
-            >
-              <span
-                aria-hidden="true"
-                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                  allowParticipantUploads ? "translate-x-5" : "translate-x-0"
-                }`}
-              />
-            </button>
-          </div>
-
-          <div className="flex items-start justify-between gap-4 border border-neutral-800/80 bg-neutral-950/60 p-4 rounded-xl">
-            <div>
-              <label className="text-xs font-semibold text-white block">
-                Ergebnisse für normale Teilnehmer nach Jurierungsende öffentlich anzeigen
-              </label>
-              <p className="text-xs text-neutral-400 mt-1 max-w-xl leading-relaxed">
-                Wenn aktiviert (Standard), können Teilnehmer nach Abschluss der Jurierung die Siegerfotos, Punkte und Ranglisten unter „Ergebnisse & Rangliste“ einsehen. Wenn deaktiviert, bleibt die Auswertung für Teilnehmer gesperrt und nur Administratoren können die Ergebnisse einsehen.
-              </p>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={publicResults}
-              onClick={() => setPublicResults(!publicResults)}
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                publicResults ? "bg-emerald-600" : "bg-neutral-700"
-              }`}
-            >
-              <span
-                aria-hidden="true"
-                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                  publicResults ? "translate-x-5" : "translate-x-0"
-                }`}
-              />
-            </button>
-          </div>
-        </div>
-
-        {/* Buttons */}
-        <div className="flex items-center justify-end gap-3 pt-4 border-t border-neutral-800">
+        {/* Action Buttons */}
+        <div className="flex items-center justify-between pt-4 border-t border-neutral-800">
           <Link
             href="/admin"
-            className="rounded-xl border border-neutral-800 bg-neutral-900 px-5 py-2.5 text-sm font-medium text-neutral-300 hover:text-white"
+            className="rounded-xl border border-neutral-800 bg-neutral-900 px-5 py-2.5 text-xs font-semibold text-neutral-300 hover:text-white hover:bg-neutral-800 transition"
           >
-            Zurück
+            Abbrechen
           </Link>
           <button
             type="submit"
             disabled={isSaving}
-            className="rounded-xl bg-purple-600 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-purple-600/20 hover:bg-purple-500 transition disabled:opacity-50"
+            className="rounded-xl bg-purple-600 px-6 py-2.5 text-xs font-bold text-white shadow-lg shadow-purple-600/30 hover:bg-purple-500 transition disabled:opacity-50 flex items-center gap-2"
           >
-            {isSaving ? "Wird gespeichert..." : "Änderungen speichern"}
+            {isSaving ? (
+              <>
+                <span className="h-3.5 w-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>Wird gespeichert...</span>
+              </>
+            ) : (
+              <>
+                <CheckCircle className="h-4 w-4" />
+                <span>Änderungen speichern</span>
+              </>
+            )}
           </button>
         </div>
       </form>
