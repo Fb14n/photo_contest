@@ -223,6 +223,7 @@ export default function JudgeContestPage({
         votingMode={contest.votingMode}
         anonymousJudging={contest.anonymousJudging}
         submissions={submissions}
+        topics={contest.topics}
         onRatingSaved={() => {
           loadData();
         }}

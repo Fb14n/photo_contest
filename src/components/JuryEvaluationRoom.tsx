@@ -16,7 +16,14 @@ import {
   ZoomOut,
   RotateCcw,
   X,
+  Layers,
 } from "lucide-react";
+
+export interface TopicInfo {
+  id: string;
+  title: string;
+  description?: string | null;
+}
 
 export interface JurySubmission {
   id: string;
@@ -52,6 +59,7 @@ interface JuryEvaluationRoomProps {
   votingMode: string;
   anonymousJudging: boolean;
   submissions: JurySubmission[];
+  topics?: TopicInfo[];
   onRatingSaved: () => void;
 }
 
@@ -59,22 +67,50 @@ export default function JuryEvaluationRoom({
   contestId,
   contestTitle,
   submissions,
+  topics,
   onRatingSaved,
 }: JuryEvaluationRoomProps) {
+  const [selectedTopicId, setSelectedTopicId] = useState<string>("all");
   const [filter, setFilter] = useState<"all" | "unrated" | "rated">("all");
   const [currentIndex, setCurrentIndex] = useState(0);
+
+  // Combine topics from props and from submissions
+  const allTopics: TopicInfo[] = (() => {
+    const map = new Map<string, TopicInfo>();
+    if (topics && topics.length > 0) {
+      for (const t of topics) {
+        map.set(t.id, t);
+      }
+    }
+    for (const sub of submissions) {
+      if (sub.topicId && !map.has(sub.topicId)) {
+        map.set(sub.topicId, {
+          id: sub.topicId,
+          title: sub.topicTitle || "Thema",
+        });
+      }
+    }
+    return Array.from(map.values());
+  })();
 
   // Eligible submissions: exclude juror's own submissions from evaluation
   const eligibleSubmissions = submissions.filter((s) => !s.isOwn);
 
-  // Filtered submissions
-  const filteredSubmissions = eligibleSubmissions.filter((s) => {
+  // Filtered by Topic
+  const topicSubmissions = eligibleSubmissions.filter((s) => {
+    if (selectedTopicId === "all") return true;
+    return s.topicId === selectedTopicId;
+  });
+
+  // Filtered by Rating Status (all / unrated / rated)
+  const filteredSubmissions = topicSubmissions.filter((s) => {
     if (filter === "unrated") return !s.myRating;
     if (filter === "rated") return !!s.myRating;
     return true;
   });
 
   const currentSub = filteredSubmissions[currentIndex] || null;
+  const activeTopicObj = allTopics.find((t) => t.id === selectedTopicId) || null;
 
   // Active score & comment for the currently viewed image (null if not yet rated)
   const [activeScore, setActiveScore] = useState<number | null>(
@@ -214,9 +250,16 @@ export default function JuryEvaluationRoom({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handlePrev, handleNext, handleSaveScore, activeComment, lightboxOpen]);
 
-  const ratedCount = eligibleSubmissions.filter((s) => s.myRating).length;
-  const totalCount = eligibleSubmissions.length;
-  const progressPercent = totalCount > 0 ? Math.round((ratedCount / totalCount) * 100) : 0;
+  const totalEligibleCount = eligibleSubmissions.length;
+  const totalRatedCount = eligibleSubmissions.filter((s) => !!s.myRating).length;
+  const overallProgressPercent = totalEligibleCount > 0 ? Math.round((totalRatedCount / totalEligibleCount) * 100) : 0;
+
+  const currentScopeTotal = topicSubmissions.length;
+  const currentScopeRated = topicSubmissions.filter((s) => !!s.myRating).length;
+  const currentScopeProgressPercent = currentScopeTotal > 0 ? Math.round((currentScopeRated / currentScopeTotal) * 100) : 0;
+
+  const currentTopicIndex = allTopics.findIndex((t) => t.id === selectedTopicId);
+  const nextTopic = currentTopicIndex >= 0 && currentTopicIndex < allTopics.length - 1 ? allTopics[currentTopicIndex + 1] : null;
 
   if (eligibleSubmissions.length === 0) {
     return (
@@ -245,19 +288,110 @@ export default function JuryEvaluationRoom({
         <div className="flex items-center gap-4">
           <div className="flex flex-col items-end">
             <span className="text-xs font-semibold text-neutral-300">
-              {ratedCount} von {totalCount} bewertet ({progressPercent}%)
+              {selectedTopicId === "all" ? (
+                <>
+                  {totalRatedCount} von {totalEligibleCount} bewertet ({overallProgressPercent}%)
+                </>
+              ) : (
+                <>
+                  {currentScopeRated} von {currentScopeTotal} bewertet in „{activeTopicObj?.title}“ ({currentScopeProgressPercent}%)
+                </>
+              )}
             </span>
-            <div className="mt-1.5 h-2 w-44 overflow-hidden rounded-full bg-neutral-800">
+            <div className="mt-1.5 h-2 w-48 overflow-hidden rounded-full bg-neutral-800">
               <div
                 className="h-full bg-gradient-to-r from-purple-500 to-sky-400 transition-all duration-300"
-                style={{ width: `${progressPercent}%` }}
+                style={{
+                  width: `${selectedTopicId === "all" ? overallProgressPercent : currentScopeProgressPercent}%`,
+                }}
               />
             </div>
+            {selectedTopicId !== "all" && (
+              <span className="text-[10px] text-neutral-500 mt-1 font-mono">
+                Gesamtwettbewerb: {totalRatedCount}/{totalEligibleCount} ({overallProgressPercent}%)
+              </span>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Filter Tabs */}
+      {/* Topic / Sparte Selector Bar */}
+      {allTopics.length > 1 && (
+        <div className="flex flex-col gap-2.5 rounded-2xl border border-neutral-800 bg-neutral-900/60 p-4 backdrop-blur shadow-sm">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-xs font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-2">
+              <Layers className="h-4 w-4 text-purple-400" />
+              Sparte / Thema auswählen:
+            </span>
+            <span className="text-xs text-neutral-500 font-medium">
+              {allTopics.length} Sparten im Wettbewerb
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => {
+                setSelectedTopicId("all");
+                setCurrentIndex(0);
+              }}
+              className={`rounded-xl px-4 py-2.5 text-xs font-bold transition flex items-center gap-2 border ${
+                selectedTopicId === "all"
+                  ? "bg-purple-600 text-white border-purple-500 shadow-lg shadow-purple-600/30"
+                  : "bg-neutral-950/80 text-neutral-300 border-neutral-800 hover:border-neutral-700 hover:text-white"
+              }`}
+            >
+              <span>Alle Sparten</span>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-mono ${
+                selectedTopicId === "all" ? "bg-black/40 text-purple-200" : "bg-neutral-800 text-neutral-400"
+              }`}>
+                {eligibleSubmissions.length}
+              </span>
+              {totalEligibleCount > 0 && totalRatedCount === totalEligibleCount && (
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+              )}
+            </button>
+
+            {allTopics.map((topic, tIdx) => {
+              const subsInThisTopic = eligibleSubmissions.filter((s) => s.topicId === topic.id);
+              const ratedInThisTopic = subsInThisTopic.filter((s) => s.myRating).length;
+              const isSelected = selectedTopicId === topic.id;
+              const isComplete = subsInThisTopic.length > 0 && ratedInThisTopic === subsInThisTopic.length;
+
+              return (
+                <button
+                  key={topic.id}
+                  onClick={() => {
+                    setSelectedTopicId(topic.id);
+                    setCurrentIndex(0);
+                  }}
+                  className={`rounded-xl px-4 py-2.5 text-xs font-bold transition flex items-center gap-2 border ${
+                    isSelected
+                      ? "bg-purple-600 text-white border-purple-500 shadow-lg shadow-purple-600/30"
+                      : "bg-neutral-950/80 text-neutral-300 border-neutral-800 hover:border-neutral-700 hover:text-white"
+                  }`}
+                >
+                  <span className="text-neutral-500 font-mono text-[11px]">#{tIdx + 1}</span>
+                  <span>{topic.title}</span>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-mono ${
+                      isSelected
+                        ? "bg-black/40 text-purple-200 font-semibold"
+                        : "bg-neutral-800 text-neutral-400"
+                    }`}
+                  >
+                    {ratedInThisTopic} / {subsInThisTopic.length}
+                  </span>
+                  {isComplete && (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Filter Tabs (All / Open / Rated in selected scope) */}
       <div className="flex items-center gap-2">
         <button
           onClick={() => {
@@ -270,7 +404,7 @@ export default function JuryEvaluationRoom({
               : "text-neutral-400 hover:text-white hover:bg-neutral-900"
           }`}
         >
-          Alle Bilder ({submissions.length})
+          Alle ({topicSubmissions.length})
         </button>
         <button
           onClick={() => {
@@ -284,7 +418,7 @@ export default function JuryEvaluationRoom({
           }`}
         >
           <Clock className="h-3.5 w-3.5" />
-          Noch offen ({submissions.length - ratedCount})
+          Noch offen ({topicSubmissions.length - currentScopeRated})
         </button>
         <button
           onClick={() => {
@@ -298,7 +432,7 @@ export default function JuryEvaluationRoom({
           }`}
         >
           <CheckCircle2 className="h-3.5 w-3.5" />
-          Bereits bewertet ({ratedCount})
+          Bereits bewertet ({currentScopeRated})
         </button>
       </div>
 
@@ -336,18 +470,19 @@ export default function JuryEvaluationRoom({
               </button>
 
               {/* Status Tag on image */}
-              <div className="absolute top-4 left-4 flex items-center gap-2">
-                <span className="rounded-lg bg-black/70 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur border border-white/10">
-                  {currentSub.topicTitle}
+              <div className="absolute top-4 left-4 flex flex-wrap items-center gap-2 z-10">
+                <span className="flex items-center gap-1.5 rounded-lg bg-black/80 px-3 py-1.5 text-xs font-bold text-white backdrop-blur border border-purple-500/40 shadow-lg">
+                  <Layers className="h-3.5 w-3.5 text-purple-400" />
+                  Sparte: {currentSub.topicTitle}
                 </span>
 
                 {currentSub.myRating ? (
-                  <span className="flex items-center gap-1 rounded-lg bg-emerald-500/80 px-2.5 py-1 text-xs font-bold text-white backdrop-blur shadow">
+                  <span className="flex items-center gap-1.5 rounded-lg bg-emerald-600/90 px-3 py-1.5 text-xs font-bold text-white backdrop-blur shadow-lg border border-emerald-400/30">
                     <Star className="h-3.5 w-3.5 fill-white" />
                     Bewertet: {currentSub.myRating.score} / 10
                   </span>
                 ) : (
-                  <span className="flex items-center gap-1 rounded-lg bg-amber-500/80 px-2.5 py-1 text-xs font-medium text-white backdrop-blur">
+                  <span className="flex items-center gap-1.5 rounded-lg bg-amber-600/90 px-3 py-1.5 text-xs font-medium text-white backdrop-blur shadow-lg border border-amber-400/30">
                     Noch nicht bewertet
                   </span>
                 )}
@@ -366,32 +501,132 @@ export default function JuryEvaluationRoom({
               </div>
 
               {/* Counter overlay */}
-              <div className="absolute bottom-4 right-4 rounded-lg bg-black/70 px-3 py-1 text-xs font-mono text-neutral-300 backdrop-blur border border-white/10">
-                {currentIndex + 1} / {filteredSubmissions.length}
+              <div className="absolute bottom-4 right-4 rounded-lg bg-black/80 px-3 py-1.5 text-xs font-mono font-bold text-neutral-200 backdrop-blur border border-white/10 shadow-lg">
+                Foto {currentIndex + 1} von {filteredSubmissions.length}
+                {selectedTopicId !== "all" && (
+                  <span className="text-purple-300 font-normal ml-1">
+                    (in {activeTopicObj?.title})
+                  </span>
+                )}
               </div>
             </div>
 
-            {/* Thumbnail Carousel */}
-            <div className="flex gap-2 overflow-x-auto pb-2 pt-1 scrollbar-thin">
-              {filteredSubmissions.map((sub, idx) => (
-                <button
-                  key={sub.id}
-                  onClick={() => setCurrentIndex(idx)}
-                  className={`group relative h-16 w-24 shrink-0 overflow-hidden rounded-xl border-2 transition ${
-                    idx === currentIndex
-                      ? "border-purple-500 ring-2 ring-purple-500/40"
-                      : "border-neutral-800 opacity-60 hover:opacity-100"
-                  }`}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={sub.thumbnailUrl || sub.filePath} alt="" className="h-full w-full object-cover" />
-                  {sub.myRating && (
-                    <div className="absolute bottom-1 right-1 rounded-full bg-emerald-500 p-0.5 text-white shadow">
-                      <CheckCircle2 className="h-3 w-3" />
-                    </div>
-                  )}
-                </button>
-              ))}
+            {/* Camera Roll / Filmstrip with topic grouping */}
+            <div className="flex flex-col gap-2 rounded-2xl border border-neutral-800 bg-neutral-900/40 p-3 backdrop-blur">
+              <div className="flex items-center justify-between text-[11px] text-neutral-400 px-1">
+                <span className="font-semibold text-neutral-200 flex items-center gap-1.5">
+                  <Layers className="h-3.5 w-3.5 text-purple-400" />
+                  {selectedTopicId === "all"
+                    ? `Alle Sparten (${filteredSubmissions.length} Fotos in ${allTopics.length} Sparten)`
+                    : `Sparte: ${activeTopicObj?.title} (${filteredSubmissions.length} Fotos)`}
+                </span>
+                <span className="text-neutral-400">
+                  Auswahl: <strong className="text-white font-mono">{filteredSubmissions.length > 0 ? currentIndex + 1 : 0}</strong> / {filteredSubmissions.length}
+                </span>
+              </div>
+
+              <div className="flex gap-3 overflow-x-auto pb-2 pt-1 scrollbar-thin items-center">
+                {selectedTopicId === "all" ? (
+                  // Grouped by Sparte with clear section capsules
+                  allTopics.map((topic, tIdx) => {
+                    const subsInTopic = filteredSubmissions.filter((s) => s.topicId === topic.id);
+                    if (subsInTopic.length === 0) return null;
+                    const ratedInTopic = subsInTopic.filter((s) => !!s.myRating).length;
+                    const isTopicFinished = ratedInTopic === subsInTopic.length;
+
+                    return (
+                      <div
+                        key={topic.id}
+                        className="flex items-center gap-2.5 shrink-0 bg-neutral-950/80 p-2.5 rounded-2xl border border-neutral-800 shadow-md"
+                      >
+                        {/* Section Header Capsule */}
+                        <div className="flex flex-col justify-center px-3 py-1.5 bg-neutral-900 rounded-xl border border-neutral-800 text-left shrink-0">
+                          <span className="text-[9px] font-bold text-purple-400 uppercase tracking-wider">
+                            Sparte #{tIdx + 1}
+                          </span>
+                          <span className="text-xs font-bold text-white truncate max-w-[120px]" title={topic.title}>
+                            {topic.title}
+                          </span>
+                          <span className="text-[10px] text-neutral-400 mt-0.5 flex items-center gap-1">
+                            <span>{ratedInTopic}/{subsInTopic.length} bewertet</span>
+                            {isTopicFinished && <CheckCircle2 className="h-3 w-3 text-emerald-400 inline" />}
+                          </span>
+                        </div>
+
+                        {/* Thumbnails in this Sparte */}
+                        <div className="flex items-center gap-2">
+                          {subsInTopic.map((sub) => {
+                            const globalIdx = filteredSubmissions.findIndex((s) => s.id === sub.id);
+                            const isSelected = globalIdx === currentIndex;
+                            return (
+                              <button
+                                key={sub.id}
+                                onClick={() => setCurrentIndex(globalIdx)}
+                                className={`group relative h-16 w-24 shrink-0 overflow-hidden rounded-xl border-2 transition ${
+                                  isSelected
+                                    ? "border-purple-500 ring-2 ring-purple-500/50 scale-105 z-10"
+                                    : "border-neutral-800 opacity-60 hover:opacity-100 hover:border-neutral-600"
+                                }`}
+                                title={`${sub.title} (${sub.topicTitle})`}
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={sub.thumbnailUrl || sub.filePath}
+                                  alt=""
+                                  className="h-full w-full object-cover"
+                                />
+                                {sub.myRating ? (
+                                  <div className="absolute bottom-1 right-1 flex items-center gap-0.5 rounded-md bg-emerald-600/90 backdrop-blur px-1.5 py-0.5 text-[9px] font-bold text-white shadow">
+                                    <Star className="h-2.5 w-2.5 fill-white" />
+                                    <span>{sub.myRating.score}</span>
+                                  </div>
+                                ) : (
+                                  <div className="absolute bottom-1 right-1 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-black" />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  // Single Topic Filmstrip
+                  filteredSubmissions.map((sub, idx) => {
+                    const isSelected = idx === currentIndex;
+                    return (
+                      <button
+                        key={sub.id}
+                        onClick={() => setCurrentIndex(idx)}
+                        className={`group relative h-16 w-24 shrink-0 overflow-hidden rounded-xl border-2 transition ${
+                          isSelected
+                            ? "border-purple-500 ring-2 ring-purple-500/50 scale-105 z-10"
+                            : "border-neutral-800 opacity-60 hover:opacity-100 hover:border-neutral-600"
+                        }`}
+                        title={sub.title}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={sub.thumbnailUrl || sub.filePath}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                        <div className="absolute top-1 left-1 rounded bg-black/75 px-1.5 py-0.5 text-[9px] font-mono font-bold text-neutral-300 backdrop-blur">
+                          #{idx + 1}
+                        </div>
+                        {sub.myRating ? (
+                          <div className="absolute bottom-1 right-1 flex items-center gap-0.5 rounded-md bg-emerald-600/90 backdrop-blur px-1.5 py-0.5 text-[9px] font-bold text-white shadow">
+                            <Star className="h-2.5 w-2.5 fill-white" />
+                            <span>{sub.myRating.score}</span>
+                          </div>
+                        ) : (
+                          <div className="absolute bottom-1 right-1 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-black" />
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
             </div>
           </div>
 
@@ -583,7 +818,7 @@ export default function JuryEvaluationRoom({
                     : "Note speichern"}
                 </button>
 
-                {currentIndex < filteredSubmissions.length - 1 && (
+                {currentIndex < filteredSubmissions.length - 1 ? (
                   <button
                     type="button"
                     onClick={handleNext}
@@ -593,7 +828,20 @@ export default function JuryEvaluationRoom({
                     Weiter
                     <ChevronRight className="h-4 w-4 ml-1" />
                   </button>
-                )}
+                ) : selectedTopicId !== "all" && nextTopic ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedTopicId(nextTopic.id);
+                      setCurrentIndex(0);
+                    }}
+                    className="flex items-center justify-center rounded-xl border border-purple-500/50 bg-purple-600/30 px-3.5 py-2.5 text-xs font-bold text-purple-200 hover:bg-purple-600/50 transition shadow-lg shadow-purple-600/20"
+                    title={`Weiter zur nächsten Sparte: ${nextTopic.title}`}
+                  >
+                    <span>Nächste Sparte</span>
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </button>
+                ) : null}
               </div>
 
               <p className="mt-3 text-[10px] text-center text-neutral-400">
@@ -607,11 +855,28 @@ export default function JuryEvaluationRoom({
       ) : (
         <div className="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-12 text-center">
           <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-500 mb-3" />
-          <h3 className="text-lg font-bold text-white">Alles erledigt!</h3>
-          <p className="text-sm text-neutral-400 mt-1">
-            Du hast alle Bilder in diesem Filter bewertet. Du kannst deine Noten bis zum Ende der
-            Jurierungszeit jederzeit im Tab &bdquo;Bereits bewertet&ldquo; ändern.
+          <h3 className="text-lg font-bold text-white">
+            {selectedTopicId !== "all"
+              ? `Alle Bilder in Sparte „${activeTopicObj?.title}“ bewertet!`
+              : "Alles erledigt!"}
+          </h3>
+          <p className="text-sm text-neutral-400 mt-1 max-w-md mx-auto">
+            {selectedTopicId !== "all" && nextTopic
+              ? `Du hast diese Sparte vollständig abgeschlossen. Klicke unten, um direkt mit der nächsten Sparte „${nextTopic.title}“ fortzufahren.`
+              : "Du hast alle Bilder in dieser Ansicht bewertet. Du kannst deine Noten bis zum Ende der Jurierungszeit jederzeit im Tab „Bereits bewertet“ anpassen."}
           </p>
+          {selectedTopicId !== "all" && nextTopic && (
+            <button
+              onClick={() => {
+                setSelectedTopicId(nextTopic.id);
+                setCurrentIndex(0);
+              }}
+              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-purple-500 transition shadow-lg shadow-purple-600/30"
+            >
+              <span>Weiter zu Sparte: {nextTopic.title}</span>
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          )}
         </div>
       )}
 
