@@ -34,7 +34,7 @@ export async function GET(
     let whereClause: Record<string, unknown> = { contestId: contest.id };
 
     if (onlyMine) {
-      // Explicitly requested only own submissions (e.g. upload page)
+      // Explicitly requested only own submissions (e.g. upload page /submit)
       if (!session) {
         return NextResponse.json({ submissions: [] });
       }
@@ -42,28 +42,60 @@ export async function GET(
         contestId: contest.id,
         userId: session.userId,
       };
-    } else {
-      // If evaluating in jury room, exclude current user's own submissions
-      if ((forJudging || effectiveStatus === "RATING") && session) {
-        whereClause.userId = { not: session.userId };
+    } else if (forJudging) {
+      // In the jury evaluation room (/contests/[slug]/judge):
+      if (!contest.allowParticipantUploads) {
+        // Direct rating contest:
+        // All photos were provided by the admin/organizer as the contest gallery to be rated.
+        // Nobody was a competing participant submitter.
+        // Therefore, EVERY judge (including Admin and all jurors/participants)
+        // MUST see and evaluate ALL photos in the contest, including photos created by admin or without author!
+        whereClause = { contestId: contest.id };
+      } else {
+        // Regular contest with participant submissions:
+        // Exclude the current user's own submissions so they don't vote on themselves.
+        // CRITICAL SQLITE FIX: Using { not: session.userId } on nullable userId drops NULL in SQL!
+        // We MUST explicitly include { userId: null } so authorless/admin-injected photos are visible!
+        if (session && !isAdmin) {
+          whereClause = {
+            contestId: contest.id,
+            OR: [
+              { userId: null },
+              { userId: { not: session.userId } },
+            ],
+          };
+        } else {
+          whereClause = { contestId: contest.id };
+        }
       }
-
-      if (!isAdmin) {
+    } else {
+      // General viewing (Admin management page, Finished results, etc.)
+      if (isAdmin) {
+        // Admin always sees ALL submissions without any exclusion!
+        whereClause = { contestId: contest.id };
+      } else {
         if (effectiveStatus === "DRAFT") {
           return NextResponse.json({ submissions: [] });
         }
 
         if (effectiveStatus === "SUBMISSION" || effectiveStatus === "UPCOMING") {
-          // Only return current user's submissions
-          if (!session) {
-            return NextResponse.json({ submissions: [] });
+          if (!contest.allowParticipantUploads) {
+            // Direct rating: preparation phase, show contest submissions
+            whereClause = { contestId: contest.id };
+          } else {
+            // Regular contest during submission phase: non-admins only see their own submissions
+            if (!session) {
+              return NextResponse.json({ submissions: [] });
+            }
+            whereClause = {
+              contestId: contest.id,
+              userId: session.userId,
+            };
           }
-          whereClause = {
-            contestId: contest.id,
-            userId: session.userId,
-          };
+        } else {
+          // In RATING or FINISHED phase: non-admins can see all submissions (sanitized)
+          whereClause = { contestId: contest.id };
         }
-        // In FINISHED phase, juror or participant can see all submissions
       }
     }
 

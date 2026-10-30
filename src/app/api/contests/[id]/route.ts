@@ -109,34 +109,38 @@ export async function GET(
       }
     }
 
-    // Calculate user submission counts per topic and total
+    // Calculate user submission counts and total submissions per topic
     let userSubmissionCountsByTopic: Record<string, number> = {};
+    let totalSubmissionsByTopic: Record<string, number> = {};
     let userTotalSubmissions = 0;
 
-    if (session) {
-      const userSubs = await prisma.submission.findMany({
-        where: {
-          contestId: contest.id,
-          userId: session.userId,
-        },
-        select: {
-          id: true,
-          topicId: true,
-        },
-      });
+    const allContestSubs = await prisma.submission.findMany({
+      where: { contestId: contest.id },
+      select: {
+        id: true,
+        topicId: true,
+        userId: true,
+      },
+    });
 
-      userTotalSubmissions = userSubs.length;
-      for (const sub of userSubs) {
+    for (const sub of allContestSubs) {
+      totalSubmissionsByTopic[sub.topicId] = (totalSubmissionsByTopic[sub.topicId] || 0) + 1;
+      if (session && sub.userId === session.userId) {
         userSubmissionCountsByTopic[sub.topicId] = (userSubmissionCountsByTopic[sub.topicId] || 0) + 1;
+        userTotalSubmissions++;
       }
     }
 
     const topicsWithUserCounts = contest.topics.map((t) => ({
       ...t,
+      totalSubmissionsCount: totalSubmissionsByTopic[t.id] || 0,
       userSubmissionCount: userSubmissionCountsByTopic[t.id] || 0,
     }));
 
     const effectiveStatus = getEffectiveStatus(contest);
+    const isDirectRatingParticipant = !contest.allowParticipantUploads && !!userParticipation;
+    const isPeerReviewVoter = contest.votingMode === "PEER_REVIEW" && (contest.accessType === "OPEN" || !!userParticipation);
+    const isJuror = !!userJuror || isPeerReviewVoter || isDirectRatingParticipant || isAdmin;
 
     return NextResponse.json({
       contest: {
@@ -144,8 +148,8 @@ export async function GET(
         topics: topicsWithUserCounts,
         userTotalSubmissions: session ? userTotalSubmissions : 0,
         effectiveStatus,
-        isParticipant: !!userParticipation,
-        isJuror: !!userJuror || (contest.votingMode === "PEER_REVIEW" && !!userParticipation),
+        isParticipant: !!userParticipation || contest.accessType === "OPEN",
+        isJuror,
       },
     });
   } catch (error) {

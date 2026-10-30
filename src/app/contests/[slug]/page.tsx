@@ -21,6 +21,8 @@ import {
   Edit,
   BarChart2,
   Camera,
+  ExternalLink,
+  X,
 } from "lucide-react";
 import { getStatusBadgeInfo, ContestEffectiveStatus } from "@/lib/contest-status";
 
@@ -30,6 +32,7 @@ interface Topic {
   description?: string | null;
   maxSubmissionsPerUser: number;
   userSubmissionCount?: number;
+  totalSubmissionsCount?: number;
 }
 
 interface ContestDetail {
@@ -79,6 +82,8 @@ export default function ContestDetailPage({
 
   const [contest, setContest] = useState<ContestDetail | null>(null);
   const [currentUser, setCurrentUser] = useState<{ userId: string; role: string; email: string } | null>(null);
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [previewSubmission, setPreviewSubmission] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,8 +98,19 @@ export default function ContestDetailPage({
     fetch(`/api/contests/${resolvedParams.slug}`)
       .then((res) => res.json())
       .then((d) => {
-        if (d.error) setError(d.error);
-        else if (d.contest) setContest(d.contest);
+        if (d.error) {
+          setError(d.error);
+        } else if (d.contest) {
+          setContest(d.contest);
+          fetch(`/api/contests/${d.contest.id}/submissions`)
+            .then((r) => r.json())
+            .then((subData) => {
+              if (Array.isArray(subData.submissions)) {
+                setSubmissions(subData.submissions);
+              }
+            })
+            .catch(() => {});
+        }
       })
       .catch(() => setError("Wettbewerb konnte nicht geladen werden"))
       .finally(() => setLoading(false));
@@ -316,8 +332,17 @@ export default function ContestDetailPage({
             <div className="inline-flex items-center gap-1.5 rounded-xl border border-sky-500/20 bg-sky-500/10 px-3.5 py-2 text-xs font-medium text-sky-300">
               <Camera className="h-4 w-4 text-sky-400" />
               <span>
-                Deine Einreichungen: <strong>{contest.userTotalSubmissions ?? 0}</strong>{" "}
-                {(contest.userTotalSubmissions ?? 0) === 1 ? "Bild" : "Bilder"} eingereicht
+                {contest.allowParticipantUploads === false ? (
+                  <>
+                    Wettbewerbsfotos: <strong>{contest._count?.submissions || 0}</strong>{" "}
+                    {(contest._count?.submissions || 0) === 1 ? "Bild" : "Bilder"} bereitgestellt
+                  </>
+                ) : (
+                  <>
+                    Deine Einreichungen: <strong>{contest.userTotalSubmissions ?? 0}</strong>{" "}
+                    {(contest.userTotalSubmissions ?? 0) === 1 ? "Bild" : "Bilder"} eingereicht
+                  </>
+                )}
               </span>
             </div>
           )}
@@ -352,7 +377,9 @@ export default function ContestDetailPage({
               <h2 className="text-lg font-bold text-white">Wettbewerbsthemen</h2>
             </div>
             <p className="text-xs text-neutral-400 mb-6">
-              Jeder Teilnehmer kann Fotos zu folgenden vom Administrator festgelegten Themen einreichen:
+              {contest.allowParticipantUploads === false
+                ? "Für diesen Wettbewerb werden die Fotos von der Administration bereitgestellt. Folgende Themen/Sparten stehen zur Jurierung:"
+                : "Jeder Teilnehmer kann Fotos zu folgenden vom Administrator festgelegten Themen einreichen:"}
             </p>
 
             <div className="space-y-4">
@@ -376,26 +403,38 @@ export default function ContestDetailPage({
 
                       <div className="flex flex-wrap items-center gap-2 sm:self-auto self-start pl-8 sm:pl-0">
                         {currentUser && (
-                          <span
-                            className={`rounded-md border px-2.5 py-0.5 text-[11px] font-medium flex items-center gap-1.5 ${
-                              isFull
-                                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 font-semibold"
-                                : userCount > 0
-                                ? "border-sky-500/30 bg-sky-500/10 text-sky-400"
-                                : "border-neutral-800 bg-neutral-900/80 text-neutral-400"
-                            }`}
-                          >
-                            {isFull && <CheckCircle2 className="h-3 w-3 text-emerald-400" />}
-                            <span>
-                              {userCount} von {topic.maxSubmissionsPerUser} von dir eingereicht
-                              {isFull && " (Voll)"}
+                          contest.allowParticipantUploads === false ? (
+                            <span className="rounded-md border border-purple-500/30 bg-purple-500/10 text-purple-300 px-2.5 py-0.5 text-[11px] font-medium flex items-center gap-1.5">
+                              <Camera className="h-3 w-3 text-purple-400" />
+                              <span>
+                                {topic.totalSubmissionsCount ?? 0}{" "}
+                                {(topic.totalSubmissionsCount ?? 0) === 1 ? "Foto" : "Fotos"} bereitgestellt
+                              </span>
                             </span>
-                          </span>
+                          ) : (
+                            <span
+                              className={`rounded-md border px-2.5 py-0.5 text-[11px] font-medium flex items-center gap-1.5 ${
+                                isFull
+                                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 font-semibold"
+                                  : userCount > 0
+                                  ? "border-sky-500/30 bg-sky-500/10 text-sky-400"
+                                  : "border-neutral-800 bg-neutral-900/80 text-neutral-400"
+                              }`}
+                            >
+                              {isFull && <CheckCircle2 className="h-3 w-3 text-emerald-400" />}
+                              <span>
+                                {userCount} von {topic.maxSubmissionsPerUser} von dir eingereicht
+                                {isFull && " (Voll)"}
+                              </span>
+                            </span>
+                          )
                         )}
 
-                        <span className="rounded-md border border-neutral-800 bg-neutral-900 px-2 py-0.5 text-[11px] text-neutral-400">
-                          Max. {topic.maxSubmissionsPerUser} {topic.maxSubmissionsPerUser === 1 ? "Bild" : "Bilder"} pro Person
-                        </span>
+                        {contest.allowParticipantUploads !== false && (
+                          <span className="rounded-md border border-neutral-800 bg-neutral-900 px-2 py-0.5 text-[11px] text-neutral-400">
+                            Max. {topic.maxSubmissionsPerUser} {topic.maxSubmissionsPerUser === 1 ? "Bild" : "Bilder"} pro Person
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -403,7 +442,7 @@ export default function ContestDetailPage({
                       <p className="mt-2 text-xs text-neutral-400 pl-8">{topic.description}</p>
                     )}
 
-                    {currentUser && (
+                    {currentUser && contest.allowParticipantUploads !== false && (
                       <div className="mt-3 pl-8 pr-1">
                         <div className="w-full bg-neutral-900 h-1.5 rounded-full overflow-hidden">
                           <div
@@ -461,6 +500,69 @@ export default function ContestDetailPage({
               </div>
             </div>
           </div>
+
+          {/* Gallery of Contest Photos */}
+          {submissions.length > 0 && (
+            <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-6 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-800 pb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Camera className="h-5 w-5 text-purple-400" />
+                    <h2 className="text-lg font-bold text-white">
+                      Fotos im Wettbewerb ({submissions.length})
+                    </h2>
+                  </div>
+                  <p className="text-xs text-neutral-400 mt-0.5">
+                    {contest.effectiveStatus === "RATING"
+                      ? "Diese Bilder stehen aktuell zur Bewertung durch die Jury bereit."
+                      : "Übersicht der vorhandenen Wettbewerbsfotografien."}
+                  </p>
+                </div>
+
+                {(contest.isJuror || isAdmin) && contest.effectiveStatus === "RATING" && (
+                  <Link
+                    href={`/contests/${contest.slug}/judge`}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-md shadow-purple-600/20 hover:bg-purple-500 transition self-start sm:self-auto"
+                  >
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    Zur Bewertung (0–10)
+                  </Link>
+                )}
+              </div>
+
+              {/* Photos Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-1">
+                {submissions.map((sub) => (
+                  <div
+                    key={sub.id}
+                    onClick={() => setPreviewSubmission(sub)}
+                    className="group relative flex flex-col justify-between overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950/60 p-2.5 transition hover:border-neutral-700 hover:shadow-lg cursor-pointer"
+                  >
+                    <div className="relative aspect-[3/2] w-full overflow-hidden rounded-lg bg-neutral-900 border border-neutral-800/80">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={sub.thumbnailUrl || sub.filePath}
+                        alt={sub.title}
+                        loading="lazy"
+                        className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    </div>
+                    <div className="mt-2 space-y-0.5">
+                      <h4 className="text-xs font-semibold text-white truncate">{sub.title}</h4>
+                      <div className="flex items-center justify-between text-[10px] text-neutral-400">
+                        <span className="truncate text-purple-300">{sub.topicTitle}</span>
+                        {sub.photographerName && (
+                          <span className="truncate text-neutral-500 max-w-[80px]">
+                            {sub.photographerName}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right Column: Upload Rules & Guidelines */}
@@ -662,6 +764,91 @@ export default function ContestDetailPage({
           )}
         </div>
       </div>
+
+      {/* Lightbox Modal for Photo View */}
+      {previewSubmission && (
+        <div
+          onClick={() => setPreviewSubmission(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative max-w-4xl w-full bg-neutral-900 border border-neutral-800 rounded-3xl overflow-hidden shadow-2xl"
+          >
+            <div className="relative aspect-[3/2] w-full bg-neutral-950 flex items-center justify-center overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={previewSubmission.filePath}
+                alt={previewSubmission.title}
+                className="max-h-[70vh] w-auto max-w-full object-contain"
+              />
+              <button
+                onClick={() => setPreviewSubmission(null)}
+                className="absolute top-4 right-4 rounded-full bg-black/60 p-2 text-white hover:bg-black/90 transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-bold text-white">{previewSubmission.title}</h3>
+                  <p className="text-xs text-neutral-400 mt-1">
+                    Thema: <strong className="text-purple-400">{previewSubmission.topicTitle}</strong>
+                    {previewSubmission.photographerName && (
+                      <>
+                        {" "}• Urheber: <strong className="text-sky-400">{previewSubmission.photographerName}</strong>
+                      </>
+                    )}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={previewSubmission.filePath}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs text-neutral-300 hover:text-white"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Originaldatei
+                  </a>
+                  {(contest.isJuror || isAdmin) && contest.effectiveStatus === "RATING" && (
+                    <Link
+                      href={`/contests/${contest.slug}/judge`}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-purple-500"
+                    >
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                      Bewerten
+                    </Link>
+                  )}
+                </div>
+              </div>
+
+              {previewSubmission.description && (
+                <p className="text-xs text-neutral-300 mt-3 whitespace-pre-line bg-neutral-950/60 p-3 rounded-xl border border-neutral-800">
+                  {previewSubmission.description}
+                </p>
+              )}
+
+              {(previewSubmission.cameraModel || previewSubmission.iso || previewSubmission.aperture) && (
+                <div className="mt-4 flex flex-wrap items-center gap-3 text-[11px] text-neutral-400 border-t border-neutral-800 pt-3">
+                  {previewSubmission.cameraModel && (
+                    <span className="flex items-center gap-1">
+                      <Camera className="h-3 w-3 text-neutral-500" />
+                      {previewSubmission.cameraModel}
+                    </span>
+                  )}
+                  {previewSubmission.lens && <span>Objektiv: {previewSubmission.lens}</span>}
+                  {previewSubmission.aperture && <span>Blende: {previewSubmission.aperture}</span>}
+                  {previewSubmission.shutterSpeed && <span>Verschluss: {previewSubmission.shutterSpeed}</span>}
+                  {previewSubmission.iso && <span>ISO: {previewSubmission.iso}</span>}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

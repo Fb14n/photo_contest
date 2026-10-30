@@ -99,8 +99,8 @@ export async function POST(
     // Check authorization based on votingMode
     if (!isAdmin) {
       if (contest.votingMode === "PEER_REVIEW") {
-        // Can't rate your own picture!
-        if (submission.userId && submission.userId === session.userId) {
+        // Can't rate your own picture in regular contests with personal submissions!
+        if (contest.allowParticipantUploads && submission.userId && submission.userId === session.userId) {
           return NextResponse.json({ error: "Du kannst dein eigenes Bild nicht bewerten." }, { status: 400 });
         }
 
@@ -110,11 +110,11 @@ export async function POST(
             OR: [{ userId: session.userId }, { email: session.email }],
           },
         });
-        if (!isParticipant) {
-          return NextResponse.json({ error: "Nur Teilnehmer dürfen an diesem Wettbewerb abstimmen." }, { status: 403 });
+        if (!isParticipant && contest.accessType === "INVITE_ONLY") {
+          return NextResponse.json({ error: "Nur geladene Teilnehmer dürfen an diesem Wettbewerb abstimmen." }, { status: 403 });
         }
       } else {
-        // EXCLUSIVE_JURY: User must be an assigned juror
+        // EXCLUSIVE_JURY: User must be an assigned juror (or invited participant in direct rating mode)
         const isJuror = await prisma.contestJuror.findFirst({
           where: {
             contestId: contest.id,
@@ -122,7 +122,18 @@ export async function POST(
           },
         });
 
-        if (!isJuror && session.role !== "JUROR") {
+        let isDirectRatingParticipant = false;
+        if (!contest.allowParticipantUploads) {
+          const part = await prisma.contestParticipant.findFirst({
+            where: {
+              contestId: contest.id,
+              OR: [{ userId: session.userId }, { email: session.email }],
+            },
+          });
+          if (part) isDirectRatingParticipant = true;
+        }
+
+        if (!isJuror && session.role !== "JUROR" && !isDirectRatingParticipant) {
           return NextResponse.json({ error: "Du bist für diesen Wettbewerb nicht als Juror eingeteilt." }, { status: 403 });
         }
       }
