@@ -259,9 +259,16 @@ export default function AdminContestSubmissionsPage({
           body: formData,
         });
 
-        const resData = await res.json();
+        let resData: any = {};
+        try {
+          resData = await res.json();
+        } catch {
+          resData = { error: `Server-Antwort ungültig (${res.status} ${res.statusText})` };
+        }
+
         if (!res.ok) {
-          errors.push(`„${item.file.name}“: ${resData.error || "Fehler"}`);
+          const detailsStr = Array.isArray(resData.details) && resData.details.length > 0 ? `: ${resData.details.join("; ")}` : "";
+          errors.push(`„${item.file.name}“: ${resData.error || "Fehler"}${detailsStr}`);
         } else {
           successCount++;
         }

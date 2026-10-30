@@ -241,9 +241,16 @@ export default function ImageUploadZone({
           body: formData,
         });
 
-        const data = await res.json();
+        let data: any = {};
+        try {
+          data = await res.json();
+        } catch {
+          data = { error: `Server-Antwort ungültig (${res.status} ${res.statusText})` };
+        }
+
         if (!res.ok) {
-          throw new Error(data.error || `Fehler beim Hochladen von „${item.title}“`);
+          const detailsStr = Array.isArray(data.details) && data.details.length > 0 ? `: ${data.details.join("; ")}` : "";
+          throw new Error((data.error || `Fehler beim Hochladen von „${item.title}“`) + detailsStr);
         }
       }
 

@@ -269,7 +269,18 @@ export async function POST(
       }
     }
 
-    const formData = await req.formData();
+    let formData: FormData;
+    try {
+      formData = await req.formData();
+    } catch (err: any) {
+      console.error("FormData parse error:", err);
+      return NextResponse.json(
+        {
+          error: "Die Bilddatei konnte nicht vollständig übertragen werden (Upload-Stream abgebrochen oder Datei zu groß).",
+        },
+        { status: 400 }
+      );
+    }
     const file = formData.get("file") as File | null;
     const topicId = formData.get("topicId") as string | null;
     const title = (formData.get("title") as string | null)?.trim() || "";

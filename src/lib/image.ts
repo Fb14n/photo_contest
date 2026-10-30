@@ -210,7 +210,7 @@ export function validateImageRules(
 
         if (!matchesStandard && !matchesInverted) {
           errors.push(
-            `Seitenverhältnis entspricht nicht der Vorgabe (${rules.aspectRatio}). Erkannt: ${imageMeta.aspectRatio}`
+            `Seitenverhältnis entspricht nicht der Vorgabe (${rules.aspectRatio}). Erkannt: ${imageMeta.aspectRatio} (${imageMeta.width}x${imageMeta.height}px)`
           );
         }
       }
