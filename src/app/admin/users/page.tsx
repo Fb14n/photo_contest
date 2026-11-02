@@ -96,6 +96,8 @@ export default function AdminUsersPage() {
 
   // Confirm Modals State
   const [userToDelete, setUserToDelete] = useState<UserItem | null>(null);
+  const [deleteUserSubmissions, setDeleteUserSubmissions] = useState(true);
+  const [deleteUserRatings, setDeleteUserRatings] = useState(true);
   const [isDeletingUser, setIsDeletingUser] = useState(false);
   const [requestAction, setRequestAction] = useState<{ id: string; name: string; isDelete: boolean } | null>(null);
   const [isProcessingRequest, setIsProcessingRequest] = useState(false);
@@ -271,6 +273,8 @@ export default function AdminUsersPage() {
       showError("Der letzte verbleibende Administrator-Account kann nicht gelöscht werden. Es muss immer mindestens ein Admin im System existieren.");
       return;
     }
+    setDeleteUserSubmissions(user._count.submissions > 0);
+    setDeleteUserRatings(user._count.ratings > 0);
     setUserToDelete(user);
   };
 
@@ -279,12 +283,19 @@ export default function AdminUsersPage() {
     setIsDeletingUser(true);
 
     try {
-      const res = await fetch(`/api/admin/users/${userToDelete.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/users/${userToDelete.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deleteSubmissions: deleteUserSubmissions,
+          deleteRatings: deleteUserRatings,
+        }),
+      });
       const data = await res.json();
       if (!res.ok || data.error) {
         showError(data.error || "Fehler beim Löschen");
       } else {
-        showSuccess(`Benutzer "${userToDelete.name}" wurde erfolgreich gelöscht.`);
+        showSuccess(data.message || `Benutzer "${userToDelete.name}" wurde erfolgreich gelöscht.`);
         setUserToDelete(null);
         await loadData();
       }
@@ -1121,20 +1132,100 @@ export default function AdminUsersPage() {
         </div>
       )}
 
-      {/* Confirmation Modal for User Deletion */}
-      <ConfirmModal
-        isOpen={!!userToDelete}
-        title="Benutzerkonto unwiderruflich löschen?"
-        message={`Möchtest du das Benutzerkonto von „${userToDelete?.name}“ (${userToDelete?.email}) wirklich unwiderruflich löschen? Alle zugehörigen Einreichungen, Bewertungen und Daten gehen unwiderruflich verloren.`}
-        confirmText="Benutzer löschen"
-        cancelText="Abbrechen"
-        variant="danger"
-        isLoading={isDeletingUser}
-        onConfirm={handleConfirmDeleteUser}
-        onClose={() => {
-          if (!isDeletingUser) setUserToDelete(null);
-        }}
-      />
+      {/* Confirmation Modal for User Deletion with Toggles */}
+      {userToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-lg rounded-2xl border border-neutral-800 bg-neutral-900 shadow-2xl p-6 text-white space-y-5">
+            <div className="flex items-center gap-3 text-red-400">
+              <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20">
+                <Trash2 className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Benutzerkonto löschen</h3>
+                <p className="text-xs text-neutral-400">Diese Aktion kann nicht rückgängig gemacht werden.</p>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-sm font-semibold text-white block">{userToDelete.name}</span>
+                  <span className="text-xs text-neutral-400 font-mono">{userToDelete.email}</span>
+                </div>
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded border border-neutral-700 bg-neutral-800 text-neutral-300">
+                  {userToDelete.role}
+                </span>
+              </div>
+              <div className="flex items-center gap-4 text-xs text-neutral-400 pt-1 border-t border-neutral-800/80">
+                <span>📷 {userToDelete._count.submissions} Einreichungen</span>
+                <span>⭐ {userToDelete._count.ratings} Bewertungen</span>
+                <span>🏆 {userToDelete._count.participants} Wettbewerbe</span>
+              </div>
+            </div>
+
+            <div className="space-y-2.5">
+              <p className="text-xs font-semibold text-neutral-300">Wähle die gewünschten Lösch-Optionen:</p>
+
+              <label className="flex items-start gap-3 p-3.5 rounded-xl border border-neutral-800 bg-neutral-950/70 hover:bg-neutral-900/60 cursor-pointer transition">
+                <input
+                  type="checkbox"
+                  checked={deleteUserSubmissions}
+                  onChange={(e) => setDeleteUserSubmissions(e.target.checked)}
+                  className="mt-0.5 rounded accent-red-500 h-4 w-4"
+                />
+                <div className="flex-1 text-xs">
+                  <span className="font-semibold text-white block">
+                    Eingereichte Fotos löschen ({userToDelete._count.submissions} Bilder)
+                  </span>
+                  <span className="text-neutral-400 block mt-0.5">
+                    {deleteUserSubmissions
+                      ? "Alle Einreichungen dieser Person werden aus allen Wettbewerben und von der Festplatte gelöscht."
+                      : "Fotos bleiben in den Wettbewerben erhalten (Name wird als Fotograf beibehalten)."}
+                  </span>
+                </div>
+              </label>
+
+              <label className="flex items-start gap-3 p-3.5 rounded-xl border border-neutral-800 bg-neutral-950/70 hover:bg-neutral-900/60 cursor-pointer transition">
+                <input
+                  type="checkbox"
+                  checked={deleteUserRatings}
+                  onChange={(e) => setDeleteUserRatings(e.target.checked)}
+                  className="mt-0.5 rounded accent-red-500 h-4 w-4"
+                />
+                <div className="flex-1 text-xs">
+                  <span className="font-semibold text-white block">
+                    Abgegebene Bewertungen löschen ({userToDelete._count.ratings} Stimmen)
+                  </span>
+                  <span className="text-neutral-400 block mt-0.5">
+                    {deleteUserRatings
+                      ? "Alle vergebenen Punkte und Kommentare dieser Person werden vollständig entfernt."
+                      : "Vergebene Punkte bleiben in den Wettbewerbsergebnissen erhalten (anonymisiert)."}
+                  </span>
+                </div>
+              </label>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isDeletingUser}
+                onClick={() => setUserToDelete(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-neutral-300 hover:text-white hover:bg-neutral-800 transition disabled:opacity-50"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingUser}
+                onClick={handleConfirmDeleteUser}
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-semibold bg-red-600 text-white hover:bg-red-500 shadow-lg shadow-red-600/20 transition disabled:opacity-50"
+              >
+                {isDeletingUser ? "Wird gelöscht..." : "Benutzer endgültig löschen"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirmation Modal for Account Request Action */}
       <ConfirmModal

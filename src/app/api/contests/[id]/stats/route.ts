@@ -106,7 +106,7 @@ export async function GET(
         maxScore,
         ratings: isAdmin
           ? sub.ratings.map((r) => ({
-              jurorName: r.juror.name,
+              jurorName: r.juror?.name || "Ehemaliger Juror",
               score: r.score,
               comment: r.comment,
             }))

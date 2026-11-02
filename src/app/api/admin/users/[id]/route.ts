@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin, hashPassword } from "@/lib/auth";
 import { sendPasswordResetEmail } from "@/lib/email";
 import crypto from "crypto";
+import fs from "fs";
+import path from "path";
 
 export async function POST(
   req: Request,
@@ -171,11 +173,105 @@ export async function DELETE(
       }
     }
 
+    // Read toggles from JSON body or URL searchParams
+    let deleteSubmissions = false;
+    let deleteRatings = false;
+    try {
+      const body = await req.json();
+      if (body) {
+        deleteSubmissions = Boolean(body.deleteSubmissions);
+        deleteRatings = Boolean(body.deleteRatings);
+      }
+    } catch {
+      const url = new URL(req.url);
+      deleteSubmissions = url.searchParams.get("deleteSubmissions") === "true";
+      deleteRatings = url.searchParams.get("deleteRatings") === "true";
+    }
+
+    // 1. Handle Submissions
+    if (deleteSubmissions) {
+      const submissions = await prisma.submission.findMany({
+        where: { userId: id },
+        select: { id: true, filePath: true, storedFilename: true },
+      });
+
+      for (const sub of submissions) {
+        try {
+          const diskPath = path.join(process.cwd(), "public", sub.filePath.replace(/^\//, ""));
+          if (fs.existsSync(diskPath)) {
+            await fs.promises.unlink(diskPath);
+          }
+          if (sub.storedFilename) {
+            const baseFilename = path.parse(sub.storedFilename).name;
+            const thumbDiskPath = path.join(process.cwd(), "public", "uploads", "submissions", `thumb-${baseFilename}.webp`);
+            if (fs.existsSync(thumbDiskPath)) {
+              await fs.promises.unlink(thumbDiskPath);
+            }
+          }
+        } catch (e) {
+          console.warn("Could not delete file from disk:", e);
+        }
+      }
+
+      await prisma.submission.deleteMany({
+        where: { userId: id },
+      });
+    } else {
+      // Keep submissions, but unlink userId and preserve author name
+      await prisma.submission.updateMany({
+        where: { userId: id },
+        data: {
+          userId: null,
+          submitterName: targetUser.name,
+        },
+      });
+    }
+
+    // 2. Handle Ratings
+    if (deleteRatings) {
+      await prisma.rating.deleteMany({
+        where: { jurorId: id },
+      });
+    } else {
+      // Keep ratings (scores), unbind jurorId so scores stay in contest rankings
+      await prisma.rating.updateMany({
+        where: { jurorId: id },
+        data: { jurorId: null },
+      });
+    }
+
+    // 3. Remove ContestParticipant and ContestJuror memberships
+    const userEmail = targetUser.email.toLowerCase();
+    await prisma.contestParticipant.deleteMany({
+      where: {
+        OR: [{ userId: id }, { email: userEmail }],
+      },
+    });
+
+    await prisma.contestJuror.deleteMany({
+      where: {
+        OR: [{ userId: id }, { email: userEmail }],
+      },
+    });
+
+    // 4. Remove password reset tokens & account requests
+    await prisma.passwordResetToken.deleteMany({
+      where: { email: userEmail },
+    });
+
+    await prisma.accountRequest.deleteMany({
+      where: { email: userEmail },
+    });
+
+    // 5. Delete the User
     await prisma.user.delete({
       where: { id },
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      message: `Benutzer "${targetUser.name}" wurde erfolgreich gelöscht.`,
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "UNAUTHORIZED";
     if (message === "UNAUTHORIZED") {

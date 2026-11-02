@@ -16,6 +16,7 @@ import {
   Globe,
   AlertCircle,
   Download,
+  Trash2,
 } from "lucide-react";
 import InviteModal from "@/components/InviteModal";
 import UserPicker from "@/components/UserPicker";
@@ -63,6 +64,15 @@ export default function AdminContestInvitesPage({
   } | null>(null);
 
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
+
+  // Removal Modal State
+  const [personToRemove, setPersonToRemove] = useState<{
+    entry: PersonEntry;
+    type: "participant" | "juror";
+  } | null>(null);
+  const [deletePersonSubmissions, setDeletePersonSubmissions] = useState(true);
+  const [deletePersonRatings, setDeletePersonRatings] = useState(true);
+  const [isRemovingPerson, setIsRemovingPerson] = useState(false);
 
   const loadData = async () => {
     try {
@@ -209,6 +219,42 @@ export default function AdminContestInvitesPage({
     navigator.clipboard.writeText(text);
     setCopiedUrl(text);
     setTimeout(() => setCopiedUrl(null), 2000);
+  };
+
+  const handleOpenRemoveModal = (entry: PersonEntry, type: "participant" | "juror") => {
+    setPersonToRemove({ entry, type });
+    setDeletePersonSubmissions(true);
+    setDeletePersonRatings(true);
+  };
+
+  const handleConfirmRemovePerson = async () => {
+    if (!personToRemove || !contest) return;
+    setIsRemovingPerson(true);
+    try {
+      const res = await fetch(`/api/contests/${contest.id}/participants`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetId: personToRemove.entry.id,
+          type: personToRemove.type,
+          deleteSubmissions: personToRemove.type === "participant" ? deletePersonSubmissions : false,
+          deleteRatings: deletePersonRatings,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        alert(data.error || "Fehler beim Entfernen");
+      } else {
+        setEmailStatusToast(data.message || "Person erfolgreich aus dem Wettbewerb entfernt.");
+        setTimeout(() => setEmailStatusToast(null), 4000);
+        setPersonToRemove(null);
+        await loadData();
+      }
+    } catch {
+      alert("Netzwerkfehler beim Entfernen");
+    } finally {
+      setIsRemovingPerson(false);
+    }
   };
 
   if (loading) {
@@ -458,6 +504,13 @@ export default function AdminContestInvitesPage({
                               <QrCode className="h-3.5 w-3.5" />
                               QR-Code
                             </button>
+                            <button
+                              onClick={() => handleOpenRemoveModal(p, "participant")}
+                              title="Teilnehmer aus Wettbewerb entfernen"
+                              className="rounded-lg border border-neutral-800 bg-neutral-900 p-1.5 text-neutral-400 hover:text-red-400 hover:border-red-500/40 transition"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -540,6 +593,13 @@ export default function AdminContestInvitesPage({
                               <QrCode className="h-3.5 w-3.5" />
                               QR-Code
                             </button>
+                            <button
+                              onClick={() => handleOpenRemoveModal(j, "juror")}
+                              title="Juror aus Wettbewerb entfernen"
+                              className="rounded-lg border border-neutral-800 bg-neutral-900 p-1.5 text-neutral-400 hover:text-red-400 hover:border-red-500/40 transition"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -558,6 +618,106 @@ export default function AdminContestInvitesPage({
         onClose={() => setModalOpen(false)}
         inviteData={activeInviteData}
       />
+
+      {/* Confirmation Modal for Removing Person from Contest with Toggles */}
+      {personToRemove && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-lg rounded-2xl border border-neutral-800 bg-neutral-900 shadow-2xl p-6 text-white space-y-5">
+            <div className="flex items-center gap-3 text-red-400">
+              <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20">
+                <Trash2 className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">
+                  {personToRemove.type === "participant" ? "Teilnehmer entfernen" : "Juror entfernen"}
+                </h3>
+                <p className="text-xs text-neutral-400">
+                  Person aus dem Wettbewerb „{contest.title}“ entfernen.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3.5 space-y-1">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-sm font-semibold text-white block">
+                    {personToRemove.entry.name || "Kein Name hinterlegt"}
+                  </span>
+                  <span className="text-xs text-neutral-400 font-mono">
+                    {personToRemove.entry.email}
+                  </span>
+                </div>
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded border border-neutral-700 bg-neutral-800 text-neutral-300">
+                  {personToRemove.type === "participant" ? "📷 Teilnehmer" : "⚖️ Juror"}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-2.5">
+              <p className="text-xs font-semibold text-neutral-300">Lösch-Optionen:</p>
+
+              {personToRemove.type === "participant" && (
+                <label className="flex items-start gap-3 p-3.5 rounded-xl border border-neutral-800 bg-neutral-950/70 hover:bg-neutral-900/60 cursor-pointer transition">
+                  <input
+                    type="checkbox"
+                    checked={deletePersonSubmissions}
+                    onChange={(e) => setDeletePersonSubmissions(e.target.checked)}
+                    className="mt-0.5 rounded accent-red-500 h-4 w-4"
+                  />
+                  <div className="flex-1 text-xs">
+                    <span className="font-semibold text-white block">
+                      Eingereichte Fotos dieses Teilnehmers löschen
+                    </span>
+                    <span className="text-neutral-400 block mt-0.5">
+                      {deletePersonSubmissions
+                        ? "Alle Fotos dieser Person in diesem Wettbewerb werden mitsamt den Bilddateien unwiderruflich gelöscht."
+                        : "Fotos bleiben im Wettbewerb erhalten (Name wird als Urheber beibehalten, Verknüpfung gelöst)."}
+                    </span>
+                  </div>
+                </label>
+              )}
+
+              <label className="flex items-start gap-3 p-3.5 rounded-xl border border-neutral-800 bg-neutral-950/70 hover:bg-neutral-900/60 cursor-pointer transition">
+                <input
+                  type="checkbox"
+                  checked={deletePersonRatings}
+                  onChange={(e) => setDeletePersonRatings(e.target.checked)}
+                  className="mt-0.5 rounded accent-red-500 h-4 w-4"
+                />
+                <div className="flex-1 text-xs">
+                  <span className="font-semibold text-white block">
+                    Abgegebene Bewertungen dieser Person löschen
+                  </span>
+                  <span className="text-neutral-400 block mt-0.5">
+                    {deletePersonRatings
+                      ? "Alle vergebenen Punkte und Notizen dieser Person für Bilder in diesem Wettbewerb werden gelöscht."
+                      : "Vergebene Bewertungen bleiben in den Wettbewerbsergebnissen zur Wertung erhalten."}
+                  </span>
+                </div>
+              </label>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isRemovingPerson}
+                onClick={() => setPersonToRemove(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-neutral-300 hover:text-white hover:bg-neutral-800 transition disabled:opacity-50"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                disabled={isRemovingPerson}
+                onClick={handleConfirmRemovePerson}
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-semibold bg-red-600 text-white hover:bg-red-500 shadow-lg shadow-red-600/20 transition disabled:opacity-50"
+              >
+                {isRemovingPerson ? "Wird entfernt..." : "Aus Wettbewerb entfernen"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
