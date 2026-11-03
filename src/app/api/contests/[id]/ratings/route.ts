@@ -63,9 +63,9 @@ export async function POST(
       return NextResponse.json({ error: "Bitte eine Note von 0 bis 10 angeben." }, { status: 400 });
     }
 
-    const numScore = parseFloat(score);
-    if (numScore < 0 || numScore > 10) {
-      return NextResponse.json({ error: "Die Bewertung muss zwischen 0 und 10 liegen." }, { status: 400 });
+    const numScore = Math.round(parseFloat(score));
+    if (isNaN(numScore) || numScore < 0 || numScore > 10) {
+      return NextResponse.json({ error: "Die Bewertung muss eine ganze Zahl zwischen 0 und 10 sein." }, { status: 400 });
     }
 
     const contest = await prisma.contest.findFirst({

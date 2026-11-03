@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -223,6 +223,8 @@ export default function JuryEvaluationRoom({
   }, [currentIndex, filteredSubmissions.length]);
 
   // Keyboard navigation
+  const lastKeyTimeRef = useRef<{ key: string; time: number }>({ key: "", time: 0 });
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
@@ -240,7 +242,13 @@ export default function JuryEvaluationRoom({
         e.preventDefault();
         handleNext();
       } else if (e.key >= "0" && e.key <= "9") {
-        const num = parseInt(e.key, 10);
+        const now = Date.now();
+        let num = parseInt(e.key, 10);
+        // Wenn kurz zuvor "1" gedrückt wurde und jetzt "0", als 10 werten
+        if (e.key === "0" && lastKeyTimeRef.current.key === "1" && now - lastKeyTimeRef.current.time < 800) {
+          num = 10;
+        }
+        lastKeyTimeRef.current = { key: e.key, time: now };
         setActiveScore(num);
         handleSaveScore(num, activeComment);
       }
@@ -708,7 +716,7 @@ export default function JuryEvaluationRoom({
                 <span className="text-3xl font-black text-white flex items-center gap-1">
                   {activeScore !== null ? (
                     <>
-                      {activeScore.toFixed(1)}
+                      {Number.isInteger(activeScore) ? activeScore : Math.round(activeScore)}
                       <span className="text-xs font-normal text-purple-300">/ 10</span>
                     </>
                   ) : (
@@ -720,7 +728,7 @@ export default function JuryEvaluationRoom({
               </div>
 
               {/* Quick Number Buttons 0 to 10 */}
-              <div className="grid grid-cols-6 gap-1.5 mb-4">
+              <div className="grid grid-cols-6 gap-2 mb-4">
                 {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
                   <button
                     key={num}
@@ -729,44 +737,15 @@ export default function JuryEvaluationRoom({
                       setActiveScore(num);
                       handleSaveScore(num, activeComment);
                     }}
-                    className={`rounded-xl py-2 text-xs font-bold transition ${
+                    className={`rounded-xl py-2.5 text-xs font-bold transition ${
                       activeScore !== null && Math.round(activeScore) === num
                         ? "bg-purple-600 text-white shadow-lg shadow-purple-600/30 scale-105"
                         : "bg-neutral-900 border border-neutral-800 text-neutral-300 hover:border-purple-500/50 hover:bg-neutral-800"
-                    }`}
+                    } ${num === 10 ? "col-span-2" : ""}`}
                   >
                     {num}
                   </button>
                 ))}
-              </div>
-
-              {/* Fine-Tuning Slider */}
-              <div className="mb-4">
-                <div className="flex justify-between text-[11px] text-neutral-400 mb-1">
-                  <span>Feinabstimmung (Slider)</span>
-                  <span>{activeScore !== null ? `${activeScore.toFixed(1)} / 10` : "Nicht gesetzt"}</span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="10"
-                  step="0.5"
-                  value={activeScore !== null ? activeScore : 5}
-                  onChange={(e) => setActiveScore(parseFloat(e.target.value))}
-                  onMouseUp={() => {
-                    if (activeScore !== null) {
-                      handleSaveScore(activeScore, activeComment);
-                    }
-                  }}
-                  onTouchEnd={() => {
-                    if (activeScore !== null) {
-                      handleSaveScore(activeScore, activeComment);
-                    }
-                  }}
-                  className={`w-full accent-purple-500 cursor-pointer ${
-                    activeScore === null ? "opacity-50" : ""
-                  }`}
-                />
               </div>
 
               {/* Juror Comment */}
@@ -845,7 +824,7 @@ export default function JuryEvaluationRoom({
               </div>
 
               <p className="mt-3 text-[10px] text-center text-neutral-400">
-                Tipp: Tasten <kbd className="px-1 py-0.5 bg-neutral-800 rounded">0-9</kbd> bewerten direkt,{" "}
+                Tipp: Tasten <kbd className="px-1 py-0.5 bg-neutral-800 rounded">0-10</kbd> bewerten direkt,{" "}
                 <kbd className="px-1 py-0.5 bg-neutral-800 rounded">←</kbd> /{" "}
                 <kbd className="px-1 py-0.5 bg-neutral-800 rounded">→</kbd> wechseln das Foto.
               </p>
