@@ -40,5 +40,16 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# local persistent data
+# local persistent data & databases
 /data/
+*.db
+*.db-journal
+*.sqlite
+prisma/*.db
+prisma/*.db-journal
+
+# uploads
+/public/uploads/*
+!/public/uploads/.gitkeep
+!/public/uploads/submissions/clara-glasfassade.jpg
+!/public/uploads/submissions/david-treppenhaus.jpg

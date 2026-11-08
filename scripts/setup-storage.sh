@@ -52,8 +52,9 @@ mount -a
 echo "✓ /mnt/storage erfolgreich gemountet!"
 df -h /mnt/storage
 
-# Berechtigungen fuer Benutzer fabian setzen
-chown -R fabian:fabian /mnt/storage
+# Berechtigungen fuer Anwendungsbenutzer setzen
+APP_USER="${APP_USER:-${SUDO_USER:-$(whoami)}}"
+chown -R "$APP_USER:$APP_USER" /mnt/storage
 mkdir -p /mnt/storage/photocontest/uploads
 mkdir -p /mnt/storage/photocontest/backups
 
@@ -61,11 +62,11 @@ echo ""
 echo "=================================================="
 echo " 4. Bestehende Uploads synchronisieren"
 echo "=================================================="
-UPLOADS_SRC="/home/fabian/server-services/photocontest/data/uploads"
+UPLOADS_SRC="${UPLOADS_SRC:-./data/uploads}"
 if [ -d "$UPLOADS_SRC" ]; then
     echo "Kopiere bestehende Fotos auf die HDD..."
     cp -a "$UPLOADS_SRC"/* /mnt/storage/photocontest/uploads/ 2>/dev/null || true
-    chown -R fabian:fabian /mnt/storage/photocontest/uploads
+    chown -R "$APP_USER:$APP_USER" /mnt/storage/photocontest/uploads
     echo "✓ Fotos erfolgreich synchronisiert!"
 fi
 
